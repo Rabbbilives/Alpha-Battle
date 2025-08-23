@@ -1,0 +1,355 @@
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+
+const SowingHand = ({ count, position }: { count: number; position: { x: number; y: number } }) => {
+  return (
+    <AnimatePresence>
+      {count > 0 && position.x !== -1 && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.5 }}
+          animate={{ opacity: 1, scale: 1, x: position.x, y: position.y }}
+          exit={{ opacity: 0, scale: 0.5 }}
+          transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+          className="absolute z-50 flex items-center justify-center bg-black/50 rounded-full p-2"
+          style={{ top: 0, left: 0 }}
+        >
+          <div className="flex flex-wrap items-center justify-center gap-1">
+            {Array.from({ length: Math.min(count, 7) }).map((_, i) => (
+              <Seed key={i} />
+            ))}
+          </div>
+          <span className="ml-2 text-white font-bold">{count}</span>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+};
+
+
+export function AyoGame({ 
+  boardStyle = 'default',
+  onScoreChange,
+  player1Score,
+  player2Score,
+  player1Name,
+  player2Name,
+  isComputerOpponent = false,
+  difficulty = 2,
+}: AyoGameProps) {
+  const [board, setBoard] = useState(initialBoard);
+  const [currentPlayer, setCurrentPlayer] = useState(1);
+  const [notification, setNotification] = useState(`${player1Name}'s turn`);
+  const [isSowing, setIsSowing] = useState(false);
+  const [gameOver, setGameOver] = useState(false);
+  const { toast } = useToast();
+  const boardRef = useRef<HTMLDivElement>(null);
+  const pitRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const [sowingHand, setSowingHand] = useState<{ count: number; position: { x: number, y: number } }>({ count: 0, position: { x: -1, y: -1 } });
+
+
+  const getPitPosition = (index: number) => {
+    if (boardRef.current && pitRefs.current[index]) {
+      const boardRect = boardRef.current.getBoundingClientRect();
+      const pitRect = pitRefs.current[index]!.getBoundingClientRect();
+      return {
+        x: pitRect.left - boardRect.left + pitRect.width / 2 - 20,
+        y: pitRect.top - boardRect.top + pitRect.height / 2 - 20,
+      };
+    }
+    return { x: -1, y: -1 };
+  };
+
+  const getPlayerName = useCallback((playerNumber: number) => {
+    return playerNumber === 1 ? player1Name : player2Name;
+  }, [player1Name, player2Name]);
+
+  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+  const endGame = useCallback((finalBoard: number[], finalP1Score: number, finalP2Score: number) => {
+    const p1PitsTotal = PLAYER_ONE_PITS.map(p => finalBoard[p]).reduce((a, b) => a + b, 0);
+    const p2PitsTotal = PLAYER_TWO_PITS.map(p => finalBoard[p]).reduce((a, b) => a + b, 0);
+  
+    onScoreChange('player1', (prev) => prev + p1PitsTotal);
+    onScoreChange('player2', (prev) => prev + p2PitsTotal);
+    
+    const absoluteFinalP1Score = finalP1Score + p1PitsTotal;
+    const absoluteFinalP2Score = finalP2Score + p2PitsTotal;
+
+    setBoard(Array(12).fill(0));
+    setGameOver(true);
+    setIsSowing(false);
+    
+    const winnerName = absoluteFinalP1Score > absoluteFinalP2Score ? player1Name : absoluteFinalP2Score > absoluteFinalP1Score ? player2Name : 'None';
+    const winningMessage = winnerName === 'None' ? "It's a draw!" : `${winnerName} wins the game!`;
+    setNotification(`Game Over! ${winningMessage}`);
+    return true;
+  }, [onScoreChange, player1Name, player2Name]);
+
+  const checkForEndGameCondition = useCallback((currentBoard: number[], p1Score: number, p2Score: number) => {
+    const p1PitsTotal = PLAYER_ONE_PITS.map(p => currentBoard[p]).reduce((a, b) => a + b, 0);
+    const p2PitsTotal = PLAYER_TWO_PITS.map(p => currentBoard[p]).reduce((a, b) => a + b, 0);
+    
+    if (p1PitsTotal === 0 || p2PitsTotal === 0) {
+      endGame(currentBoard, p1Score, p2Score);
+      return true;
+    }
+    return false;
+  }, [endGame]);
+
+  const handlePitClick = async (index: number) => {
+    if (isSowing || gameOver) return;
+
+    if (
+      (currentPlayer === 1 && !PLAYER_ONE_PITS.includes(index)) ||
+      (currentPlayer === 2 && !PLAYER_TWO_PITS.includes(index))
+    ) {
+      toast({ variant: 'destructive', description: 'Not your side of the board!' });
+      return;
+    }
+
+    if (board[index] === 0) {
+      toast({ variant: 'destructive', description: 'This pit is empty. Choose another.' });
+      return;
+    }
+    
+    setIsSowing(true);
+    let seedsInHand = board[index];
+    let newBoard = [...board];
+    newBoard[index] = 0;
+    
+    await sowSeeds(newBoard, seedsInHand, index, currentPlayer);
+  };
+  
+  const sowSeeds = async (currentBoard: number[], seedsToSow: number, turnStartPit: number, playerSowing: number) => {
+    let tempP1Score = player1Score;
+    let tempP2Score = player2Score;
+    
+    const onTempScoreChange = (player: 'player1' | 'player2', value: number) => {
+        if (player === 'player1') tempP1Score += value;
+        else tempP2Score += value;
+        onScoreChange(player, (prev) => prev + value);
+    };
+
+    setBoard([...currentBoard]);
+    
+    let currentIndex = turnStartPit;
+    let newBoard = [...currentBoard];
+    const totalSeedsOnBoard = newBoard.reduce((a, b) => a + b, 0) + seedsToSow;
+    
+    setSowingHand({ count: seedsToSow, position: getPitPosition(currentIndex) });
+    await sleep(300);
+
+    while (seedsToSow > 0) {
+        currentIndex = (currentIndex + 1) % 12;
+        if (currentIndex === turnStartPit) continue;
+
+        setSowingHand(prev => ({ ...prev, position: getPitPosition(currentIndex) }));
+        await sleep(300);
+        
+        newBoard[currentIndex]++;
+        seedsToSow--;
+        setSowingHand(prev => ({ ...prev, count: seedsToSow }));
+        setBoard([...newBoard]);
+        
+        if (newBoard[currentIndex] === 4) {
+            const pitOwner = PLAYER_ONE_PITS.includes(currentIndex) ? 1 : 2;
+            const capturedSeeds = 4;
+            newBoard[currentIndex] = 0;
+
+            onTempScoreChange(pitOwner === 1 ? 'player1' : 'player2', capturedSeeds);
+            
+            toast({ title: 'Capture!', description: `${getPlayerName(pitOwner)} captured ${capturedSeeds} seeds!` });
+            
+            if (totalSeedsOnBoard === 8) {
+                const remainingSeeds = newBoard.reduce((a, b) => a + b, 0);
+                if (remainingSeeds === 4) {
+                    onTempScoreChange(pitOwner === 1 ? 'player1' : 'player2', 4);
+                    toast({ title: 'Endgame!', description: `${getPlayerName(pitOwner)} captures the final 4 seeds!` });
+                    setSowingHand({ count: 0, position: { x: -1, y: -1 } });
+                    endGame(Array(12).fill(0), tempP1Score, tempP2Score);
+                    return;
+                }
+            }
+            setBoard([...newBoard]);
+            await sleep(100);
+        }
+    }
+
+    const lastPitIndex = currentIndex;
+    
+    setSowingHand({ count: 0, position: { x: -1, y: -1 } });
+    
+    if (newBoard[lastPitIndex] > 1) {
+        const newSeedsToSow = newBoard[lastPitIndex];
+        newBoard[lastPitIndex] = 0;
+        setNotification('Continuing turn...');
+        await sowSeeds(newBoard, newSeedsToSow, lastPitIndex, playerSowing); 
+        return;
+    }
+
+    if (checkForEndGameCondition(newBoard, tempP1Score, tempP2Score)) return;
+
+    let nextPlayer = playerSowing === 1 ? 2 : 1;
+    setCurrentPlayer(nextPlayer);
+    setNotification(`${getPlayerName(nextPlayer)}'s turn`);
+    setIsSowing(false);
+  };
+
+  const getComputerMove = useCallback((currentBoard: number[]) => {
+    const validPits = PLAYER_TWO_PITS.filter(pit => currentBoard[pit] > 0);
+    if(validPits.length === 0) return -1;
+
+    let bestMove = -1;
+    let maxCapture = -1;
+
+    const thinkingDepth = difficulty || 2;
+
+    for (const pit of validPits) {
+        let tempBoard = [...currentBoard];
+        let seeds = tempBoard[pit];
+        tempBoard[pit] = 0;
+        let currentIndex = pit;
+        let currentCapture = 0;
+
+        while(seeds > 0) {
+            currentIndex = (currentIndex + 1) % 12;
+            if (currentIndex === pit) continue;
+            tempBoard[currentIndex]++;
+            seeds--;
+            if (seeds === 0 && tempBoard[currentIndex] === 4) {
+                currentCapture += 4;
+            }
+        }
+        
+        if (tempBoard[currentIndex] > 1 && thinkingDepth > 2) {
+             currentCapture += 0.5; 
+        }
+
+        if (currentCapture > maxCapture) {
+            maxCapture = currentCapture;
+            bestMove = pit;
+        }
+    }
+    
+    if (thinkingDepth < 2 && Math.random() > 0.5) {
+      return validPits[Math.floor(Math.random() * validPits.length)];
+    }
+
+    if (bestMove !== -1 && maxCapture > 0) return bestMove;
+    
+    for (const pit of validPits) {
+        const seeds = currentBoard[pit];
+        const lastPitIndex = (pit + seeds) % 12;
+        if (currentBoard[lastPitIndex] > 0 && PLAYER_TWO_PITS.includes(lastPitIndex)) {
+            return pit;
+        }
+    }
+    
+    return validPits[Math.floor(Math.random() * validPits.length)];
+  }, [difficulty]);
+
+  useEffect(() => {
+    if (isComputerOpponent && currentPlayer === 2 && !isSowing && !gameOver) {
+        const timer = setTimeout(() => {
+            const move = getComputerMove(board);
+            if(move !== -1) {
+                handlePitClick(move);
+            }
+        }, 1500);
+        return () => clearTimeout(timer);
+    }
+  }, [currentPlayer, isSowing, gameOver, isComputerOpponent, board, getComputerMove]);
+
+
+  const styles = {
+    'default': {
+      board: 'bg-stone-300 border-stone-400',
+      pit: 'bg-gradient-to-br from-stone-700 to-stone-900 border-stone-800',
+      seedColor: 'white',
+      showSeeds: true,
+    },
+    'r-coin': {
+      board: 'bg-blue-500',
+      pit: 'bg-gradient-to-br from-stone-700 to-stone-900 border-stone-800',
+      seedColor: 'white',
+      showSeeds: true,
+    },
+    'm-coin': {
+      board: 'bg-red-600',
+      pit: 'bg-gradient-to-br from-neutral-800 to-neutral-900 border-neutral-900',
+      seedColor: 'white',
+      showSeeds: true,
+    },
+    'online': {
+        board: 'bg-blue-500 border-blue-600',
+        pit: 'bg-gradient-to-br from-stone-800 to-black',
+        seedColor: 'white',
+        showSeeds: true,
+    }
+  }[boardStyle];
+
+  return (
+    <div className="flex flex-col items-center justify-center w-full p-4">
+      <h2 className="text-2xl font-bold font-headline mb-4 text-white">{notification}</h2>
+      <div className="w-full max-w-lg md:max-w-2xl flex items-center justify-between gap-4">
+        <div ref={boardRef} className={cn("relative w-full rounded-lg shadow-2xl p-2 md:p-4 border-4", styles.board)}>
+            <SowingHand count={sowingHand.count} position={sowingHand.position} />
+            <div className="h-full grid grid-cols-6 gap-x-1 md:gap-x-2 gap-y-2 md:gap-y-4">
+                {PLAYER_TWO_PITS.slice().reverse().map((pitIndex) => (
+                    <div
+                    key={pitIndex}
+                    ref={el => pitRefs.current[pitIndex] = el}
+                    className={cn(
+                        'relative aspect-square rounded-full flex items-center justify-center shadow-inner p-1',
+                        'border-2 md:border-4 border-transparent',
+                        styles.pit,
+                        currentPlayer === 2 && !gameOver && 'border-primary cursor-pointer ring-2 md:ring-4 ring-primary/50',
+                        (isSowing || gameOver || (isComputerOpponent && currentPlayer === 2)) && 'cursor-not-allowed'
+                    )}
+                    onClick={() => handlePitClick(pitIndex)}
+                    >
+                      {styles.showSeeds && <div className="flex flex-wrap items-center justify-center gap-0.5 md:gap-1 scale-75 md:scale-100">
+                        {Array.from({ length: board[pitIndex] }).map((_, i) => <Seed key={i} color="blue" />)}
+                      </div>}
+                       {board[pitIndex] > 0 && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-lg md:text-2xl font-bold text-white/50 pointer-events-none">
+                            {board[pitIndex]}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                ))}
+                {PLAYER_ONE_PITS.map((pitIndex) => (
+                    <div
+                    key={pitIndex}
+                    ref={el => pitRefs.current[pitIndex] = el}
+                    className={cn(
+                        'relative aspect-square rounded-full flex items-center justify-center shadow-inner p-1',
+                        'border-2 md:border-4 border-transparent',
+                        styles.pit,
+                        currentPlayer === 1 && !gameOver && 'border-primary cursor-pointer ring-2 md:ring-4 ring-primary/50',
+                        (isSowing || gameOver || (isComputerOpponent && currentPlayer === 2)) && 'cursor-not-allowed'
+                    )}
+                    onClick={() => handlePitClick(pitIndex)}
+                    >
+                      {styles.showSeeds && <div className="flex flex-wrap items-center justify-center gap-0.5 md:gap-1 scale-75 md:scale-100">
+                        {Array.from({ length: board[pitIndex] }).map((_, i) => <Seed key={i} color="white" />)}
+                      </div>}
+                      {board[pitIndex] > 0 && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="text-lg md:text-2xl font-bold text-white/50 pointer-events-none">
+                            {board[pitIndex]}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                ))}
+            </div>
+        </div>
+      </div>
+    </div>
+  );
+}
