@@ -31,7 +31,7 @@ export default function AyoBattleUI({ playerRank, mStake }: Props) {
 
   return (
     <View style={styles.container}>
-      <PlayerProfileCompact name={""} country={""} rating={0} avatar={""}/>
+      <PlayerProfileCompact name={""} country={""} rating={0} avatar={""} isOwnProfile={true}/>
       {!gameState ? (
         <View style={styles.lobby}>
           <Text style={styles.title}>⚔️ Battle Ground Mode</Text>
@@ -45,7 +45,7 @@ export default function AyoBattleUI({ playerRank, mStake }: Props) {
             {gameState.currentPlayer === "me" ? "Your Turn" : "Opponent's Turn"}
           </Text>
 
-          <AyoCoreUI game={gameState.game} onPitPress={handleMove} />
+          <AyoCoreUI initialGameState={gameState.game} onPitPress={handleMove} />
 
           {gameState.isFinished && (
             <View style={styles.resultBox}>

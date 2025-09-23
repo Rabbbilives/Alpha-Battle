@@ -1,6 +1,8 @@
 
 // src/navigation/types.ts
 export type RootStackParamList = {
+  SignUp: undefined;
+  SignIn: undefined;
   Splash: undefined;
   Home: undefined;
   GameLobby: { roomId?: string } | undefined;
@@ -8,17 +10,38 @@ export type RootStackParamList = {
 
   // Wallet
   // Wallet
+  profile: { userId: string } | undefined;
   Wallet: undefined;
   TransactionHistory: undefined;
   Market: { mode?: "buy" | "sell" } | undefined;
+  notifications: undefined;
+  Auth: undefined;
 };
 
 export type Player = {
   [x: string]: any;
   name: string;
-  rating: number;
   avatar: string;
   country: string;
   stats: Record<string, { wins: number; losses: number; draws: number }>;
+  ratings: Record<string, number>;
   mcoin?: number;
+};
+
+export type GameStats = {
+  gameId: string;
+  wins: number;
+  losses: number;
+  draws: number;
+  rating: number;
+};
+
+export type EnhancedUserProfile = {
+  id: string;
+  email: string;
+  name: string;
+  avatar?: string;
+  createdAt: string;
+  updatedAt: string;
+  gameStats: GameStats[];
 };

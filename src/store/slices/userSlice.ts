@@ -1,39 +1,48 @@
 // src/store/slices/userSlice.ts
-import { createSlice, PayloadAction } from "@reduxjs/toolkit";
+import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { UserProfile } from "../../services/api/authService";
+import { fetchUserProfile, signInUser } from '../thunks/authThunks';
+import { logout } from './authSlice';
 
-type UserState = {
-  profile: any;
-  name: string | null;
-  mCoin: number;
-  rCoin: number;
-  rank: string | null;
-};
+interface UserState {
+  profile: UserProfile | null;
+  loading: boolean;
+  error: string | null;
+}
 
 const initialState: UserState = {
-  name: null,
-  mCoin: 0,
-  rCoin: 0,
-  rank: null,
+  profile: null,
+  loading: false,
+  error: null,
 };
 
 const userSlice = createSlice({
-  name: "user",
+  name: 'user',
   initialState,
-  reducers: {
-    setUser: (state, action: PayloadAction<{ name: string; rank: string }>) => {
-      state.name = action.payload.name;
-      state.rank = action.payload.rank;
-    },
-    updateMCoin: (state, action: PayloadAction<number>) => {
-      state.mCoin += action.payload;
-    },
-    updateRCoin: (state, action: PayloadAction<number>) => {
-      state.rCoin += action.payload;
-    },
-    resetUser: () => initialState,
+  reducers: {},
+  extraReducers: (builder) => {
+    builder
+      // When signIn is successful, also set the profile from its payload
+      .addCase(signInUser.fulfilled, (state, action) => {
+        state.profile = action.payload.user;
+      })
+      .addCase(fetchUserProfile.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchUserProfile.fulfilled, (state, action: PayloadAction<UserProfile>) => {
+        state.loading = false;
+        state.profile = action.payload;
+      })
+      .addCase(fetchUserProfile.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      })
+      // When logout action from authSlice is dispatched, clear the user state
+      .addCase(logout, () => {
+        return initialState;
+      });
   },
 });
 
-export const { setUser, updateMCoin, updateRCoin, resetUser } =
-  userSlice.actions;
 export default userSlice.reducer;

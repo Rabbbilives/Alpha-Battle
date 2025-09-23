@@ -1,92 +1,145 @@
-// src/screens/game/AyoGame.tsx
-"use client";
-import React from "react";
-import { View, Text, StyleSheet } from "react-native";
-import { AyoSkiaBoard } from "./AyoSkiaBoard";
-import PlayerProfileCompact from "@/src/screens/profile/PlayerProfileCompact";
-import { AyoGameState } from "./AyoCoreLogic";
+// AyoGame.tsx - main game UI
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { View, Text, StyleSheet, Alert } from "react-native";
+import { AyoSkiaImageBoard } from "./AyoSkiaBoard";
+import GamePlayerProfile from "./GamePlayerProfile";
+import {
+  AyoGameState,
+  initializeGame,
+  calculateMoveResult,
+  getValidMoves,
+  Capture,
+} from "./AyoCoreLogic";
+import { useGameTimer } from "@/src/hooks/useGameTimer";
+import { StyleProp, ViewStyle, TextStyle } from 'react-native';
 
-interface Player {
-  name: string;
-  country: string;
-  rating: number;
-  isAI: boolean;
-}
+type AyoGameProps = {
+  initialGameState?: AyoGameState;
+  onPitPress?: (pitIndex: number) => void;
+  player?: { name: string; country?: string; rating?: number; isAI?: boolean };
+  opponent?: { name: string; country?: string; rating?: number; isAI?: boolean };
+};
 
-interface AnimatedSeed {
-  id: string;
-  fromPit: number;
-  toPit: number;
-  delay: number;
-}
+export const AyoGame: React.FC<AyoGameProps> = ({ initialGameState, onPitPress, player: propPlayer, opponent: propOpponent }) => {
 
-interface AyoGameProps {
-  gameState: AyoGameState;
-  onPitPress: (pitIndex: number) => void;
-  animatedSeeds?: AnimatedSeed[];
-  player: Player;
-  opponent: Player;
-}
+  const [gameState, setGameState] = useState<AyoGameState>(initialGameState ?? initializeGame());
+  const [boardBeforeMove, setBoardBeforeMove] = useState<number[]>(gameState.board);
+  const [animatingPaths, setAnimatingPaths] = useState<number[][]>([]);
+  const [captures, setCaptures] = useState<Capture[]>([]);
+  
+  // fallback players (used only when props not supplied)
+  const defaultPlayer = { name: "Player", country: "NG", rating: 1200, isAI: false };
+  const defaultOpponent = { name: "Opponent", country: "US", rating: 1500, isAI: true };
 
-const AyoGame: React.FC<AyoGameProps> = ({
-  gameState,
-  onPitPress,
-  animatedSeeds = [],
-  player,
-  opponent,
-}) => {
+  const player = propPlayer ?? defaultPlayer;
+  const opponent = propOpponent ?? defaultOpponent;
+
+  const { player1Time, player2Time, startTimer, pauseTimer, formatTime, setLastActivePlayer } = useGameTimer(300);
+
+  const isAnimating = animatingPaths.length > 0;
+
+  useEffect(() => {
+    if (gameState.currentPlayer === 1 && !gameState.isGameOver && !isAnimating) {
+      const validMoves = getValidMoves(gameState);
+      if (validMoves.length === 0) return;
+      const aiMove = validMoves.reduce((best, pit) => gameState.board[pit] > gameState.board[best] ? pit : best);
+      const timerId = setTimeout(() => {
+        setBoardBeforeMove(gameState.board);
+        const moveResult = calculateMoveResult(gameState, aiMove);
+        setAnimatingPaths(moveResult.animationPaths);
+        setCaptures(moveResult.captures);
+        setGameState(moveResult.nextState);
+      }, 800);
+      return () => clearTimeout(timerId);
+    }
+  }, [gameState, isAnimating]);
+
+  useEffect(() => {
+    if (gameState.isGameOver) {
+      pauseTimer();
+      return;
+    }
+    if (isAnimating) {
+      pauseTimer();
+      return;
+    }
+    setLastActivePlayer(gameState.currentPlayer);
+    if (gameState.currentPlayer === 1) {
+      pauseTimer();
+    } else if (gameState.currentPlayer === 2) {
+      startTimer();
+    }
+  }, [gameState.currentPlayer, gameState.isGameOver, isAnimating, setLastActivePlayer, pauseTimer, startTimer]);
+
+  useEffect(() => {
+    const handleTimeout = (winner: 1 | 2) => {
+      const winnerName = winner === 2 ? "Player" : "Opponent";
+      const loserName = winner === 2 ? "Opponent" : "Player";
+      Alert.alert("Time's Up!", `${loserName} ran out of time. ${winnerName} wins!`);
+      setGameState(prev => ({ ...prev, isGameOver: true, currentPlayer: winner }));
+    };
+    if (player1Time <= 0) handleTimeout(2);
+    if (player2Time <= 0) handleTimeout(1);
+  }, [player1Time, player2Time]);
+
+  const handlePlayerMove = useCallback((pitIndex: number) => {
+    if (gameState.currentPlayer !== 2 || isAnimating) return;
+    pauseTimer();
+    setBoardBeforeMove(gameState.board);
+    const moveResult = calculateMoveResult(gameState, pitIndex);
+    setAnimatingPaths(moveResult.animationPaths);
+    setCaptures(moveResult.captures);
+    setGameState(moveResult.nextState);
+
+    // also call parent's onPitPress if provided
+    if (onPitPress) onPitPress(pitIndex);
+  }, [gameState, isAnimating, pauseTimer, onPitPress]);
+
+
+  const handleCaptureDuringAnimation = useCallback((pitIndex: number) => {
+    const captureInfo = captures.find((c) => c.pitIndex === pitIndex);
+    if (!captureInfo) return;
+    setGameState(prevState => {
+      const newScores = { ...prevState.scores };
+      newScores[captureInfo.awardedTo] += 4;
+      return { ...prevState, scores: newScores };
+    });
+  }, [captures]);
+
+  const handleAnimationEnd = useCallback(() => {
+    setAnimatingPaths([]);
+    setCaptures([]);
+  }, []);
+
+  const memoizedPaths = useMemo(() => animatingPaths, [animatingPaths]);
+  const memoizedCaptures = useMemo(() => captures.map(c => c.pitIndex), [captures]);
+
   return (
-    <View style={styles.container}>
-
-     <PlayerProfileCompact 
-        name={opponent.name}
-        country={opponent.country}
-        rating={opponent.rating}
-        isAI={opponent.isAI}
-      />
-
-
-      <View style={styles.boardContainer}>
-        <AyoSkiaBoard 
-          board={gameState.board} 
-          onPitPress={onPitPress}
-          animatingPath={animatedSeeds.map(seed => seed.toPit)}
-        />
+    <View style={styles.container as StyleProp<ViewStyle>}>
+      <View style={styles.profileContainer as StyleProp<ViewStyle>}>
+        <GamePlayerProfile {...opponent} score={gameState.scores[1]} timeLeft={formatTime(player1Time)} isActive={gameState.currentPlayer === 1 && !isAnimating} country={opponent.country || 'NG'} rating={opponent.rating || 1200} />
       </View>
-
-      <PlayerProfileCompact 
-        name={player.name}
-        country={player.country}
-        rating={player.rating}
-        isAI={player.isAI}
-      />
-
-      {/* Scores */}
-      <View style={styles.scores}>
-        <Text>{player.name}: {gameState.scores[1]}</Text>
-        <Text>{opponent.name}: {gameState.scores[2]}</Text>
+      <View style={styles.boardContainer as StyleProp<ViewStyle>}>
+        <AyoSkiaImageBoard board={gameState.board} boardBeforeMove={boardBeforeMove} onPitPress={handlePlayerMove} animatingPaths={memoizedPaths} captures={memoizedCaptures} onAnimationEnd={handleAnimationEnd} onCaptureDuringAnimation={handleCaptureDuringAnimation} />
       </View>
-
+      <View style={styles.profileContainer as StyleProp<ViewStyle>}>
+        <GamePlayerProfile {...player} score={gameState.scores[2]} timeLeft={formatTime(player2Time)} isActive={gameState.currentPlayer === 2 && !isAnimating} country={player.country || 'NG'} rating={player.rating || 1200} />
+      </View>
       {gameState.isGameOver && (
-        <Text style={styles.gameOver}>
+        <Text style={styles.gameOver as StyleProp<TextStyle>}>
           Game Over! Winner:{" "}
-          {gameState.scores[1] > gameState.scores[2]
-            ? player.name
-            : gameState.scores[2] > gameState.scores[1]
-            ? opponent.name
-            : "Draw"}
+          {gameState.scores[2] > gameState.scores[1] ? player.name : gameState.scores[1] > gameState.scores[2] ? opponent.name : "Draw"}
         </Text>
       )}
-      
     </View>
   );
 };
 
-export default AyoGame;
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#1b120b", alignItems: "center", justifyContent: "center" },
-  boardContainer: { flex: 1, width: "100%" },
-  scores: { flexDirection: "row", justifyContent: "space-between", width: "80%" },
-  gameOver: { marginTop: 20, fontSize: 18, fontWeight: "bold", color: "red" },
+  container: { flex: 1, justifyContent: 'space-between', padding: 10, backgroundColor: '#222' },
+  profileContainer: { alignItems: 'center', marginBottom: 12 },
+  boardContainer: { flex: 1, justifyContent: 'center' },
+  gameOver: { color: 'white', fontSize: 18, textAlign: 'center', marginTop: 10 },
 });
+
+

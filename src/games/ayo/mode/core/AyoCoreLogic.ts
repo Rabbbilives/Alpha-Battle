@@ -1,88 +1,152 @@
-// src/core/AyoCoreLogic.ts
-
+// AyoCoreLogic.ts - core game logic
 export interface AyoGameState {
-  board: number[];         // 12 pits (6 per player)
-  scores: { [key: number]: number }; // scores[1], scores[2]
+  board: number[];
+  scores: { [key: number]: number };
   currentPlayer: 1 | 2;
   isGameOver: boolean;
+  timerState: {
+    player1Time: number;
+    player2Time: number;
+    isRunning: boolean;
+    lastActivePlayer: 1 | 2;
+  };
+}
+
+export interface Capture {
+  pitIndex: number;
+  awardedTo: 1 | 2;
+}
+
+export interface MoveResult {
+  nextState: AyoGameState;
+  animationPaths: number[][];
+  captures: Capture[];
 }
 
 export const PLAYER_ONE_PITS = [0, 1, 2, 3, 4, 5];
 export const PLAYER_TWO_PITS = [6, 7, 8, 9, 10, 11];
+export const CCW_ORDER = [5, 4, 3, 2, 1, 0, 6, 7, 8, 9, 10, 11];
 
-export const initializeGame = (): AyoGameState => ({
-  board: Array(12).fill(4), // 4 seeds per pit
-  scores: { 1: 0, 2: 0 },
-  currentPlayer: 1,
-  isGameOver: false,
-});
+const getNextPit = (currentIndex: number): number => {
+  const currentPos = CCW_ORDER.indexOf(currentIndex);
+  const nextPos = (currentPos + 1) % 12;
+  return CCW_ORDER[nextPos];
+};
 
-export const makeMove = (state: AyoGameState, pitIndex: number): AyoGameState => {
+export const initializeGame = (): AyoGameState => {
+  const startingPlayer = Math.random() < 0.5 ? 1 : 2;
+  return {
+    board: Array(12).fill(4),
+    scores: { 1: 0, 2: 0 },
+    currentPlayer: startingPlayer,
+    isGameOver: false,
+    timerState: {
+      player1Time: 600,
+      player2Time: 600,
+      isRunning: false,
+      lastActivePlayer: startingPlayer,
+    },
+  };
+};
+
+export const calculateMoveResult = (
+  state: AyoGameState,
+  pitIndex: number
+): MoveResult => {
   let { board, scores, currentPlayer } = state;
   board = [...board];
   scores = { ...scores };
 
   let seeds = board[pitIndex];
-  if (seeds === 0) return state; // invalid move
-  board[pitIndex] = 0;
+  if (
+    seeds === 0 ||
+    (currentPlayer === 1 && !PLAYER_ONE_PITS.includes(pitIndex)) ||
+    (currentPlayer === 2 && !PLAYER_TWO_PITS.includes(pitIndex))
+  ) {
+    return { nextState: state, animationPaths: [], captures: [] };
+  }
 
+  const initialTotalSeeds = board.reduce((a, b) => a + b, 0);
+  const isEightSeedRuleActive = initialTotalSeeds === 8;
+
+  const animationPaths: number[][] = [];
+  const captures: Capture[] = [];
   let currentIndex = pitIndex;
 
+  const handleCapture = (pitIdx: number, isLastSeedOfSow: boolean) => {
+    const pitOwner: 1 | 2 = PLAYER_ONE_PITS.includes(pitIdx) ? 1 : 2;
+    let awardedTo: 1 | 2 = isLastSeedOfSow && pitOwner !== currentPlayer ? currentPlayer : pitOwner;
+    captures.push({ pitIndex: pitIdx, awardedTo });
+    board[pitIdx] = 0;
+  };
+
+  // Initial sow
+  let currentPath: number[] = [pitIndex];
+  board[pitIndex] = 0;
   while (seeds > 0) {
-    currentIndex = (currentIndex + 1) % 12;
+    currentIndex = getNextPit(currentIndex);
     board[currentIndex]++;
     seeds--;
-
-    // Capture rule (if pit reaches exactly 4, capture immediately)
+    currentPath.push(currentIndex);
     if (board[currentIndex] === 4) {
-      const owner = PLAYER_ONE_PITS.includes(currentIndex) ? 1 : 2;
-      scores[owner] += 4;
-      board[currentIndex] = 0;
+      if (isEightSeedRuleActive) {
+        scores[currentPlayer] += 8;
+        return {
+          nextState: { ...state, scores, board: Array(12).fill(0), isGameOver: true },
+          animationPaths: [currentPath],
+          captures: [],
+        };
+      }
+      handleCapture(currentIndex, seeds === 0);
     }
   }
+  animationPaths.push(currentPath);
 
-  // Continuation rule (if last pit has > 1, keep sowing)
-  while (board[currentIndex] > 1) {
+  // Relay sowing
+  let shouldRelay = board[currentIndex] > 1;
+  while (shouldRelay) {
     seeds = board[currentIndex];
+    currentPath = [currentIndex];
     board[currentIndex] = 0;
     while (seeds > 0) {
-      currentIndex = (currentIndex + 1) % 12;
+      currentIndex = getNextPit(currentIndex);
       board[currentIndex]++;
       seeds--;
-
+      currentPath.push(currentIndex);
       if (board[currentIndex] === 4) {
-        const owner = PLAYER_ONE_PITS.includes(currentIndex) ? 1 : 2;
-        scores[owner] += 4;
-        board[currentIndex] = 0;
+        handleCapture(currentIndex, seeds === 0);
       }
+    }
+    animationPaths.push(currentPath);
+    const wasLastPitCaptured = captures.some(c => c.pitIndex === currentIndex);
+    shouldRelay = board[currentIndex] > 1 && !wasLastPitCaptured;
+  }
+
+  const isGameOver = board.reduce((a, b) => a + b, 0) === 0;
+  let nextPlayer: 1 | 2 = currentPlayer === 1 ? 2 : 1;
+
+  if (!isGameOver) {
+    const opponentPits = nextPlayer === 1 ? PLAYER_ONE_PITS : PLAYER_TWO_PITS;
+    const opponentHasMoves = opponentPits.some((pit) => board[pit] > 0);
+    if (!opponentHasMoves) {
+      nextPlayer = currentPlayer;
     }
   }
 
-  // Special rule: If only 8 seeds remain, all belong to the player who just captured
-  const totalSeeds = board.reduce((a, b) => a + b, 0);
-  if (totalSeeds === 8) {
-    scores[currentPlayer] += 8;
-    board = Array(12).fill(0);
-  }
-
-  // End condition: if opponent has no seeds, give all remaining seeds to current player
-  const opponentPits = currentPlayer === 1 ? PLAYER_TWO_PITS : PLAYER_ONE_PITS;
-  const opponentSeeds = opponentPits.reduce((sum, idx) => sum + board[idx], 0);
-  if (opponentSeeds === 0) {
-    scores[currentPlayer] += board.reduce((a, b) => a + b, 0);
-    board = Array(12).fill(0);
-  }
-
-  // Switch player
-  const nextPlayer: 1 | 2 = currentPlayer === 1 ? 2 : 1;
-
-  // Check game over
-  const isGameOver = board.every(pit => pit === 0);
-
   return {
-    board,
-    scores,
-    currentPlayer: isGameOver ? currentPlayer : nextPlayer,
-    isGameOver,
+    nextState: {
+      ...state,
+      board,
+      scores,
+      currentPlayer: isGameOver ? currentPlayer : nextPlayer,
+      isGameOver,
+    },
+    animationPaths,
+    captures,
   };
+};
+
+export const getValidMoves = (state: AyoGameState): number[] => {
+  const pits = state.currentPlayer === 1 ? PLAYER_ONE_PITS : PLAYER_TWO_PITS;
+  return pits.filter((idx) => state.board[idx] > 0);
 };

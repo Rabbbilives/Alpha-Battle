@@ -1,29 +1,20 @@
+
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { RouteProp } from '@react-navigation/native';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { useNavigation, useRoute } from '@react-navigation/native';
 
 type RootStackParamList = {
   GameLobby: { gameId: string };
   GameModeScreen: { gameId: string; mode: string };
 };
 
-type GameLobbyScreenRouteProp = RouteProp<RootStackParamList, 'GameLobby'>;
-type GameLobbyScreenNavigationProp = StackNavigationProp<
-  RootStackParamList,
-  'GameLobby'
->;
-
-type Props = {
-  route: GameLobbyScreenRouteProp;
-  navigation: GameLobbyScreenNavigationProp;
-};
-
-export default function GameLobby({ route, navigation }: Props) {
-  const { gameId } = route.params;
+export default function GameLobby() {
+  const navigation = useNavigation<any>();
+  const route = useRoute<any>();
+  const { gameId } = (route.params as any);
 
   const handleNavigate = (mode: string) => {
-    navigation.navigate('GameModeScreen', { gameId, mode });
+    navigation.navigate('GameModeScreen', { gameId: gameId, mode: mode });
   };
 
   return (
@@ -35,7 +26,7 @@ export default function GameLobby({ route, navigation }: Props) {
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.button} onPress={() => handleNavigate('computer')}>
-        <Text style={styles.buttonText}>Play vs Computer</Text>
+        <Text style={styles.buttonText}>Play Computer</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.button} onPress={() => handleNavigate('battle')}>

@@ -1,4 +1,5 @@
-import { AyoGameState, initializeGame, makeMove as move } from "../core/AyoCoreLogic";
+// AyoComputerLogic.ts - computer opponent logic
+import { AyoGameState, initializeGame, calculateMoveResult } from "../core/AyoCoreLogic";
 import {
   randomMove,
   greedyMove,
@@ -16,7 +17,6 @@ export interface AyoComputerState {
   reward: number;
 }
 
-// ----------------- Game Lifecycle -------------------
 export function initializeComputerGame(level: ComputerLevel): AyoComputerState {
   return {
     game: initializeGame(),
@@ -30,7 +30,8 @@ export function playComputerTurn(
   state: AyoComputerState,
   pitIndex: number
 ): AyoComputerState {
-  const game = move(state.game, pitIndex);
+  const { nextState: game } = calculateMoveResult(state.game, pitIndex);
+
   const isPlayerWinner =
     game.scores[1] > 24
       ? true
@@ -42,7 +43,6 @@ export function playComputerTurn(
   return { ...state, game, isPlayerWinner, reward };
 }
 
-// ----------------- AI Move -------------------
 export function getComputerMove(game: AyoGameState, level: ComputerLevel): number {
   switch (level) {
     case 1:
@@ -54,7 +54,7 @@ export function getComputerMove(game: AyoGameState, level: ComputerLevel): numbe
     case 4:
       return scatterMove(game);
     case 5:
-      return alphaMove(game);
+      return alphaMove(game, 4);
     default:
       return randomMove(game);
   }

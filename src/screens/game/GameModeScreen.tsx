@@ -54,20 +54,9 @@ export default function GameModeScreen() {
   return (
     <ToastProvider>
     <View style={{ flex: 1, backgroundColor: "#0b1f3a" }}>
-      {/* ✅ Show user info */}
-      <Text style={styles.userInfo}>
-        Welcome {user?.name || "Guest"} | M-Coins: {user?.mCoin ?? 0} | R-Coins:{" "}
-        {user?.rCoin ?? 0}
-      </Text>
+ 
 
-      {/* ✅ Show Auth status (optional) */}
-      {auth.isAuthenticated ? (
-        <Text style={styles.authInfo}>Logged in ✅</Text>
-      ) : (
-        <Text style={styles.authInfo}>Not logged in ❌</Text>
-      )}
-
-      {/* ✅ Render Game Screen */}
+      
       {renderGameScreen()}
 
     </View>
