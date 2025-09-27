@@ -14,7 +14,7 @@ export const getRankFromRating = (rating: number) => {
   if (rating >= 1250) {
     return { level: 'Apprentice', icon: '🎓' };
   }
-  else if (rating < 1000) {
+  if (rating <= 1000) {
     return { level: 'Rookie', icon: '🌱' };
   }
 };

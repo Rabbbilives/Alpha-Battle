@@ -1,15 +1,9 @@
+// Alpha-Battle/src/games/ayo/mode/core/GamePlayerProfile.tsx
 import React from 'react';
 import { View, Text, Image, StyleSheet, useWindowDimensions } from 'react-native';
 import CountryFlag from 'react-native-country-flag';
 import { Ionicons } from '@expo/vector-icons';
-
-const getRank = (rating: number) => {
-  if (rating >= 1900) return { name: 'Alpha', icon: '🔱' };
-  if (rating >= 1700) return { name: 'Master', icon: '👑' };
-  if (rating >= 1500) return { name: 'Warrior', icon: '🔷' };
-  if (rating >= 1250) return { name: 'Pro', icon: '🟢' };
-  return { name: 'Rookie', icon: '🟤' };
-};
+import { getRankFromRating } from "@/src/utils/rank";
 
 interface GamePlayerProfileProps {
   name: string;
@@ -35,10 +29,14 @@ const GamePlayerProfile = ({
   isOwnProfile = false,
 }: GamePlayerProfileProps) => {
   const { width, height } = useWindowDimensions();
-  const rank = getRank(rating);
   const displayName = name;
   const displayAvatar = avatar || 'https://ui-avatars.com/api/?name=' + displayName;
   const isPortrait = height >= width;
+
+  // --- FIX IS HERE ---
+  // If getRankFromRating returns something invalid (like undefined),
+  // we provide a default "Unranked" object. This prevents the crash.
+  const rank = getRankFromRating(rating) || { icon: '🌱', level: 'Unranked' };
 
   return (
     <View
@@ -72,8 +70,9 @@ const GamePlayerProfile = ({
         </View>
 
         <View style={styles.row}>
+          {/* This line is now safe because 'rank' is guaranteed to be an object */}
           <Text style={styles.rank}>
-            {rank.icon} {rank.name}
+            {rank.icon} {rank.level}
           </Text>
         </View>
 
@@ -89,25 +88,34 @@ const GamePlayerProfile = ({
       </View>
 
       {timeLeft && (
-        <View style={[
-          styles.timerContainer,
-          isActive && styles.activeTimerContainer
-        ]}>
+        <View
+          style={[
+            styles.timerContainer,
+            isActive && styles.activeTimerContainer,
+          ]}
+        >
           <Ionicons
             name="time-outline"
             size={14}
-            color={isActive ? "#FFD700" : "#4A90E2"}
+            color={isActive ? '#FFD700' : '#4A90E2'}
           />
-          <Text style={[
-            styles.timer,
-            isActive && styles.activeTimer
-          ]}> {timeLeft}</Text>
+          <Text
+            style={[
+              styles.timer,
+              isActive && styles.activeTimer,
+            ]}
+          >
+            {timeLeft}
+          </Text>
         </View>
       )}
     </View>
   );
 };
 
+export default GamePlayerProfile;
+
+// Styles remain unchanged...
 const styles = StyleSheet.create({
   container: {
     padding: 5,
@@ -199,5 +207,3 @@ const styles = StyleSheet.create({
     textAlignVertical: 'center',
   },
 });
-
-export default GamePlayerProfile;

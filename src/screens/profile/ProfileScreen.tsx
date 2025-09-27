@@ -1,5 +1,5 @@
 // src/screens/profile/ProfileScreen.tsx
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,8 @@ import { useAppDispatch, useAppSelector } from '@/src/store/hooks';
 import { fetchUserProfile } from '@/src/store/thunks/authThunks';
 import { getFlagEmoji } from '../../utils/flags';
 import { getRankFromRating } from '../../utils/rank';
-import { Star, Medal, ArrowLeft, User } from 'lucide-react-native';
+import { Medal, ArrowLeft, User } from 'lucide-react-native';
+import { getGameStats } from '@/src/services/api/authService';
 
 type ProfileScreenProps = {
   isOwnProfile: boolean;
@@ -33,25 +34,81 @@ export default function ProfileScreen({ isOwnProfile = true }: ProfileScreenProp
   const dispatch = useAppDispatch();
 
   // --- SINGLE SOURCE OF TRUTH: REDUX ---
-  // Get all necessary state directly from the Redux store.
-  // This simplifies the component and prevents race conditions.
   const { token } = useAppSelector((state) => state.auth);
   const { profile: reduxProfile, loading: userLoading, error: userError } = useAppSelector((state) => state.user);
 
-  // This simple effect handles fetching data after an app restart.
+  // New state to manage the selected game for detailed stats
+  const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
+  const [gameStats, setGameStats] = useState<any[]>([]);
+  const [gameStatsLoading, setGameStatsLoading] = useState(false);
+
   useEffect(() => {
-    // If we have a token (from login or storage) but no profile data yet, fetch it.
     if (isOwnProfile && token && !reduxProfile) {
       dispatch(fetchUserProfile());
     }
   }, [isOwnProfile, token, reduxProfile, dispatch]);
 
-  // Determine which user to display: one from the route params (for other users) or the one from Redux.
-  const playerToShow = !isOwnProfile ? route.params?.player : reduxProfile;
+  const playerToShow = !isOwnProfile ? (route.params as { player: any })?.player : reduxProfile;
+
+  useEffect(() => {
+    const fetchGameStats = async () => {
+      if (isOwnProfile && token) {
+        setGameStatsLoading(true);
+        try {
+          const DEFAULT_GAMES = [
+            { id: 'chess', title: 'Chess' },
+            { id: 'ayo', title: 'Ayo' },
+            { id: 'whot', title: 'Whot' },
+            { id: 'ludo', title: 'Ludo' },
+            { id: 'draughts', title: 'Draughts' },
+          ];
+
+          const allStats = await Promise.all(
+            DEFAULT_GAMES.map(async (game) => {
+              try {
+                const stat = await getGameStats(game.id, token);
+                return stat;
+              } catch (error) {
+                return {
+                  gameId: game.id,
+                  title: game.title,
+                  wins: 0,
+                  losses: 0,
+                  draws: 0,
+                  rating: 1000,
+                  hasExistingStats: false
+                };
+              }
+            })
+          );
+          setGameStats(allStats);
+          if (allStats.length > 0) {
+            // Automatically select the first game to show stats for on load
+            setSelectedGameId(allStats[0].gameId);
+          }
+        } catch (error) {
+          console.error('Failed to fetch game stats:', error);
+          if (playerToShow && playerToShow.gameStats) {
+            setGameStats(playerToShow.gameStats);
+            if (playerToShow.gameStats.length > 0) {
+              setSelectedGameId(playerToShow.gameStats[0].gameId);
+            }
+          }
+        } finally {
+          setGameStatsLoading(false);
+        }
+      } else if (playerToShow && playerToShow.gameStats) {
+        setGameStats(playerToShow.gameStats);
+        if (playerToShow.gameStats.length > 0) {
+          setSelectedGameId(playerToShow.gameStats[0].gameId);
+        }
+      }
+    };
+
+    fetchGameStats();
+  }, [isOwnProfile, playerToShow, token]);
 
   // --- RENDER LOGIC ---
-
-  // 1. Show a loading spinner if the user profile is being fetched.
   if (userLoading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -63,7 +120,6 @@ export default function ProfileScreen({ isOwnProfile = true }: ProfileScreenProp
     );
   }
 
-  // 2. Show an error message if the fetch failed.
   if (userError) {
     return (
       <SafeAreaView style={styles.container}>
@@ -75,7 +131,6 @@ export default function ProfileScreen({ isOwnProfile = true }: ProfileScreenProp
     );
   }
 
-  // 3. If viewing your own profile and there's no token, prompt to sign in.
   if (isOwnProfile && !token) {
     return (
       <SafeAreaView style={styles.container}>
@@ -85,8 +140,7 @@ export default function ProfileScreen({ isOwnProfile = true }: ProfileScreenProp
           <Text style={styles.subtitle}>Please sign in to view your profile</Text>
           <TouchableOpacity
             style={styles.button}
-            // ✅ This uses the corrected nested navigation
-            onPress={() => navigation.navigate('Auth', { screen: 'SignIn' })}
+            onPress={() => navigation.navigate('Auth', { screen: 'SignIn' } as any)}
           >
             <Text style={styles.buttonText}>Sign In</Text>
           </TouchableOpacity>
@@ -95,7 +149,6 @@ export default function ProfileScreen({ isOwnProfile = true }: ProfileScreenProp
     );
   }
   
-  // 4. If there's no player data to show for any other reason.
   if (!playerToShow) {
     return (
       <SafeAreaView style={styles.container}>
@@ -107,15 +160,16 @@ export default function ProfileScreen({ isOwnProfile = true }: ProfileScreenProp
   }
   
   // --- SUCCESS: RENDER THE PROFILE ---
-  // Normalize the data from the playerToShow object
   const avatar = playerToShow.avatar ?? null;
   const name = playerToShow.name ?? 'Unknown Player';
   const country = playerToShow.country ?? '';
-  const gameStats = playerToShow.gameStats ?? [];
   const totalRating = gameStats.length > 0 ? gameStats.reduce((sum: number, stat: any) => sum + (stat.rating || 1000), 0) / gameStats.length : 1000;
   const rank = getRankFromRating(totalRating);
   const mcoin = playerToShow.mcoin ?? 0;
   const showMCoin = rank && ['Warrior', 'Master', 'Alpha'].includes(rank?.level ?? '');
+
+  const statsToRender = gameStats.length > 0 ? gameStats : (playerToShow?.gameStats || []);
+  const selectedGame = statsToRender.find(stat => stat.gameId === selectedGameId);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -142,32 +196,82 @@ export default function ProfileScreen({ isOwnProfile = true }: ProfileScreenProp
             <Text style={styles.rankIcon}>{rank?.icon ?? '🌱'}</Text>
             <Text style={styles.rankText}>{rank?.level ?? 'Rookie'}</Text>
           </View>
+        </View>
 
-          <View style={styles.coinRow}>
-            {showMCoin && (
-              <>
-                <Medal size={16} color="purple" />
-                <Text style={styles.coinText}>{mcoin} M-coin</Text>
-              </>
-            )}
-          </View>
+        {/* --- R-Coin and M-Coin --- */}
+        <View style={styles.coinSection}>
+          {/* Display R-coin for the selected game */}
+          {selectedGame && (
+            <View style={styles.rCoinBlock}>
+              <Text style={styles.coinHeader}>R-Coin: {selectedGame.title}</Text>
+              <Text style={styles.coinValue}>{selectedGame.rating ?? 1000}</Text>
+            </View>
+          )}
+          {/* Display M-Coin if available */}
+          {showMCoin && (
+            <View style={styles.mCoinBlock}>
+              <Medal size={24} color="#6B46C1" />
+              <Text style={styles.coinHeader}>M-Coin</Text>
+              <Text style={styles.coinValue}>{mcoin}</Text>
+            </View>
+          )}
+        </View>
 
-          <View style={styles.statBlock}>
-            <Text style={styles.statTitle}>Game Stats</Text>
-            {gameStats.length === 0 ? (
-              <Text style={styles.statDetails}>No stats available</Text>
+        {/* --- Tappable Game Stats List --- */}
+        <View style={styles.gameListContainer}>
+          <Text style={styles.gameListTitle}>Games</Text>
+          <ScrollView horizontal style={styles.gamesScrollView} showsHorizontalScrollIndicator={false}>
+            {gameStatsLoading ? (
+              <ActivityIndicator size="small" color="#666" style={{ paddingHorizontal: 20 }} />
+            ) : statsToRender.length === 0 ? (
+              <Text style={styles.noGamesText}>No games played yet</Text>
             ) : (
-              gameStats.map((s: any) => (
-                <View key={s.gameId} style={{ marginTop: 8, width: '100%' }}>
-                  <Text style={{ fontWeight: '600', textAlign: 'center' }}>{String(s.gameId).toUpperCase()}</Text>
-                  <Text style={styles.statDetails}>
-                    W: {s.wins ?? 0} | L: {s.losses ?? 0} | D: {s.draws ?? 0} | Rating: {s.rating ?? 1000}
+              statsToRender.map((s: any) => (
+                <TouchableOpacity
+                  key={s.gameId}
+                  style={[
+                    styles.gameChip,
+                    selectedGameId === s.gameId && styles.selectedGameChip
+                  ]}
+                  onPress={() => setSelectedGameId(s.gameId)}
+                >
+                  <Text style={[
+                    styles.gameChipText,
+                    selectedGameId === s.gameId && styles.selectedGameChipText
+                  ]}>
+                    {s.title}
                   </Text>
-                </View>
+                </TouchableOpacity>
               ))
             )}
-          </View>
+          </ScrollView>
         </View>
+
+        {/* --- Detailed Stats for Selected Game --- */}
+        {selectedGame && (
+          <View style={styles.statBlock}>
+            <Text style={styles.statTitle}>{selectedGame.title} Stats</Text>
+            <View style={styles.detailedStatsRow}>
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Wins</Text>
+                <Text style={styles.statValue}>{selectedGame.wins ?? 0}</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Losses</Text>
+                <Text style={styles.statValue}>{selectedGame.losses ?? 0}</Text>
+              </View>
+              <View style={styles.statItem}>
+                <Text style={styles.statLabel}>Draws</Text>
+                <Text style={styles.statValue}>{selectedGame.draws ?? 0}</Text>
+              </View>
+            </View>
+            <View style={styles.ratingBlock}>
+              <Text style={styles.statLabel}>R-Coin</Text>
+              <Text style={styles.statValue}>{selectedGame.rating ?? 1000}</Text>
+            </View>
+          </View>
+        )}
+        
       </ScrollView>
     </SafeAreaView>
   );
@@ -270,14 +374,67 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 16,
   },
-  coinRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    marginTop: 12
+  coinSection: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 16,
+    marginBottom: 16,
   },
-  coinText: { 
-    marginLeft: 6,
+  rCoinBlock: {
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: '#ECFDF5',
+    alignItems: 'center',
+    marginRight: 16,
+    minWidth: 120,
+  },
+  mCoinBlock: {
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    minWidth: 120,
+  },
+  coinHeader: {
+    fontSize: 14,
     fontWeight: '500',
+    color: '#374151',
+    marginBottom: 4,
+  },
+  coinValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#10B981',
+  },
+  gameListContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  gameListTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  gamesScrollView: {
+    flexDirection: 'row',
+  },
+  gameChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: '#E5E7EB',
+    marginRight: 10,
+  },
+  selectedGameChip: {
+    backgroundColor: '#2E86DE',
+  },
+  gameChipText: {
+    color: '#4B5563',
+    fontWeight: '600',
+  },
+  selectedGameChipText: {
+    color: '#fff',
   },
   statBlock: { 
     marginTop: 24, 
@@ -292,10 +449,35 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginBottom: 8,
   },
-  statDetails: { 
-    color: '#6B7280', 
+  detailedStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+  },
+  statItem: {
+    alignItems: 'center',
+    marginHorizontal: 10,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
     marginTop: 4,
+  },
+  ratingBlock: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  noGamesText: {
+    fontSize: 16,
+    color: '#6B7280',
     textAlign: 'center',
+    padding: 20,
   },
   loadingText: {
     fontSize: 16,

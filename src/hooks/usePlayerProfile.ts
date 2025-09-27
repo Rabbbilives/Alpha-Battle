@@ -1,30 +1,30 @@
-  // src/hooks/usePlayerProfile.ts
+// src/hooks/usePlayerProfile.ts
 
-import { useSelector } from 'react-redux';
-import { RootState } from '../store';
+import { useMemo } from 'react';
+import { useAppSelector } from '../store/hooks';
 
+/**
+ * A focused hook to get the current player's profile formatted for game components.
+ * It also returns the loading status from the user state.
+ */
 export const usePlayerProfile = () => {
-  const profile = useSelector((state: RootState) => state.user.profile);
-  const name = useSelector((state: RootState) => state.user.name);
-  const mCoin = useSelector((state: RootState) => state.user.mCoin);
-  const rCoin = useSelector((state: RootState) => state.user.rCoin);
-  const rank = useSelector((state: RootState) => state.user.rank);
-  const loading = useSelector((state: RootState) => state.user.loading);
-  const error = useSelector((state: RootState) => state.user.error);
+  // Select both the profile data AND the loading status
+  const { profile, loading } = useAppSelector((state) => state.user);
 
-  return {
-    profile,
-    name,
-    mCoin,
-    rCoin,
-    rank,
-    loading,
-    error,
-    data: profile || {
-      name: name || 'Guest',
-      mCoin: mCoin || 0,
-      rCoin: rCoin || 0,
-      rank: rank || 'Rookie',
-    }
-  };
+  const playerProfile = useMemo(() => {
+    const ayoStats = profile?.gameStats?.find(
+      (stat: any) => stat.gameId === 'ayo'
+    );
+
+    return {
+      name: profile?.name ?? 'Player',
+      country: profile?.country ?? 'NG',
+      avatar: profile?.avatar ?? null,
+      rating: ayoStats?.rating ?? 100,
+      isAI: false,
+    };
+  }, [profile]);
+
+  // Return both the processed profile data and the loading flag
+  return { ...playerProfile, isLoading: loading };
 };

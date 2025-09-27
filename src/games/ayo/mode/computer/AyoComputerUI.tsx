@@ -5,29 +5,63 @@ import { initializeComputerGame, playComputerTurn, AyoComputerState, ComputerLev
 import { calculateMoveResult } from "../core/AyoCoreLogic";
 import { AyoGame } from "../core/AyoCoreUI";
 import { usePlayerProfile } from '@/src/hooks/usePlayerProfile';
-import AyoGameOver from "@/src/games/ayo/mode/core/AyoGameOver" // <-- added
+import AyoGameOver from "./AyoGameOver";
+import { updateUserRcoin } from '@/src/store/slices/userSlice';
+import { useAppDispatch } from '@/src/store/hooks'; 
 
 const levels = [
-  { label: "Rookie (Easy)", value: 1, rating: 1000, reward: 10 },
-  { label: "Player (Normal)", value: 2, rating: 1250, reward: 20 },
-  { label: "Warrior (Hard)", value: 3, rating: 1500, reward: 30 },
-  { label: "Master (Expert)", value: 4, rating: 1700, reward: 40 },
-  { label: "Alpha (Legend)", value: 5, rating: 1900, reward: 50 },
+  { label: "Apprentice (Easy)", value: 1, rating: 1250, reward: 10 },
+  { label: "Knight (Normal)", value: 2, rating: 1500, reward: 15 },
+  { label: "Warrior (Hard)", value: 3, rating: 1700, reward: 20 },
+  { label: "Master (Expert)", value: 4, rating: 1900, reward: 25 },
+  { label: "Alpha (Legend)", value: 5, rating: 2100, reward: 30 },
 ];
+
+const BATTLE_BONUS = 15;
 
 export default function AyoComputerUI() {
   const [gameState, setGameState] = useState<AyoComputerState | null>(null);
   const [level, setLevel] = useState<ComputerLevel | null>(null);
   const [animationPaths, setAnimationPaths] = useState<number[][]>([]);
   const [aiThinking, setAiThinking] = useState(false);
+  
+  // --- FIX: Destructure the player profile and the new isLoading flag ---
   const playerProfile = usePlayerProfile();
+ const dispatch = useAppDispatch();
   const [isAnimating, setIsAnimating] = useState(false);
   const [pendingMove, setPendingMove] = useState<{ player: 1 | 2; pit: number } | null>(null);
 
+  // --- Function to handle Rematch ---
+  const handleRematch = () => {
+    if (level) {
+      startGame(level);
+    }
+  };
+
+  // --- Function to handle New Battle ---
+  const handleNewBattle = () => {
+    setGameState(null);
+    setLevel(null);
+  };
+
+  // --- Effect to award R-coins on win ---
+  useEffect(() => {
+    if (gameState?.isPlayerWinner === true && level) {
+      const levelData = levels.find(l => l.value === level);
+      const totalReward = (levelData?.reward ?? 0) + BATTLE_BONUS;
+      
+      console.log(`Player won! Awarding ${totalReward} R-coins.`);
+      // dispatch(updateUserRcoin(totalReward)); // <-- UNCOMMENT THIS when your Redux action is ready
+    }
+  }, [gameState?.isPlayerWinner, level]);  
+
+  // ... (startGame, onAnimationDone, handleMove, useEffect logic remains the same)
   const startGame = (lvl: ComputerLevel) => {
     setLevel(lvl);
     setGameState(initializeComputerGame(lvl));
   };
+ 
+  
 
   const onAnimationDone = () => {
     if (pendingMove && gameState) {
@@ -83,16 +117,26 @@ export default function AyoComputerUI() {
     return () => clearTimeout(timer);
   }, [gameState, level, isAnimating]);
 
-  const opponent = useMemo(() => {
-    if (!level) return null;
-    const levelData = levels.find(l => l.value === level);
-    return {
-      name: `${levelData?.label.split(' ')[0]} AI`,
-      country: "NG",
-      rating: levelData?.rating || 1000,
-      isAI: true,
-    };
-  }, [level]);
+    const opponent = useMemo(() => {
+        if (!level) return null;
+        const levelData = levels.find(l => l.value === level);
+        return {
+            name: `${levelData?.label.split(' ')[0]} AI`,
+            country: "NG",
+            rating: levelData?.rating || 1000,
+            isAI: true,
+        };
+    }, [level]);
+
+  // --- FIX: Add a loading state check here ---
+  if (playerProfile.isLoading) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color="#fff" />
+        <Text style={styles.loadingText}>Loading Profile...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -111,27 +155,26 @@ export default function AyoComputerUI() {
         </View>
       ) : (
         <View style={styles.gameContainer}>
-          <AyoGame
-            initialGameState={gameState.game}
-            onPitPress={handleMove}
-            opponent={opponent}
-            player={{
-              name: playerProfile?.name ?? 'You',
-              country: playerProfile?.country ?? 'NG',
-              rating: playerProfile?.rating ?? 1200,
-              isAI: false
-            }}
-          />
+                    <AyoGame
+                        initialGameState={gameState.game}
+                        onPitPress={handleMove}
+                        opponent={opponent}
+                        player={playerProfile} // using the simplified playerProfile object
+                    />
 
           {aiThinking && <ActivityIndicator size="large" color="#fff" style={{ marginTop: 10 }} />}
 
           {gameState.isPlayerWinner !== null && level && (
-            <AyoGameOver
-              result={gameState.isPlayerWinner ? "win" : "loss"}
-              level={level}
-              mode="computer"
-              onRestart={() => startGame(level)}
-            />
+<AyoGameOver
+  result={gameState.isPlayerWinner ? "win" : "loss"}
+  level={level}
+  onRematch={handleRematch}
+  onNewBattle={handleNewBattle}
+  playerName={playerProfile.name}
+  opponentName={opponent.name}
+  playerRating={playerProfile.rating} // ✅ pass rating
+/>
+
           )}
         </View>
       )}
@@ -140,10 +183,11 @@ export default function AyoComputerUI() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 10, backgroundColor: '#222' },
+  container: { flex: 1, padding: 10, backgroundColor: '#222', justifyContent: 'center' },
   levelSelector: { justifyContent: 'center', alignItems: 'center', flex: 1 },
   title: { color: 'white', fontSize: 20, marginBottom: 20 },
   levelButton: { backgroundColor: '#444', padding: 12, borderRadius: 8, marginVertical: 6, width: '80%', alignItems: 'center' },
   levelText: { color: 'white', fontSize: 18 },
   gameContainer: { flex: 1 },
+  loadingText: { marginTop: 10, color: '#fff', fontSize: 16 },
 });

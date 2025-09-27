@@ -1,6 +1,5 @@
-// AyoGame.tsx - main game UI
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { View, Text, StyleSheet, Alert } from "react-native";
+import { View, StyleSheet } from "react-native";
 import { AyoSkiaImageBoard } from "./AyoSkiaBoard";
 import GamePlayerProfile from "./GamePlayerProfile";
 import {
@@ -11,7 +10,7 @@ import {
   Capture,
 } from "./AyoCoreLogic";
 import { useGameTimer } from "@/src/hooks/useGameTimer";
-import { StyleProp, ViewStyle, TextStyle } from 'react-native';
+import AyoGameOver from "../computer/AyoGameOver"; // ✅ import overlay
 
 type AyoGameProps = {
   initialGameState?: AyoGameState;
@@ -20,29 +19,38 @@ type AyoGameProps = {
   opponent?: { name: string; country?: string; rating?: number; isAI?: boolean };
 };
 
-export const AyoGame: React.FC<AyoGameProps> = ({ initialGameState, onPitPress, player: propPlayer, opponent: propOpponent }) => {
-
-  const [gameState, setGameState] = useState<AyoGameState>(initialGameState ?? initializeGame());
+export const AyoGame: React.FC<AyoGameProps> = ({
+  initialGameState,
+  onPitPress,
+  player: propPlayer,
+  opponent: propOpponent,
+}) => {
+  const [gameState, setGameState] = useState<AyoGameState>(
+    initialGameState ?? initializeGame()
+  );
   const [boardBeforeMove, setBoardBeforeMove] = useState<number[]>(gameState.board);
   const [animatingPaths, setAnimatingPaths] = useState<number[][]>([]);
   const [captures, setCaptures] = useState<Capture[]>([]);
-  
-  // fallback players (used only when props not supplied)
+
   const defaultPlayer = { name: "Player", country: "NG", rating: 1200, isAI: false };
   const defaultOpponent = { name: "Opponent", country: "US", rating: 1500, isAI: true };
 
   const player = propPlayer ?? defaultPlayer;
   const opponent = propOpponent ?? defaultOpponent;
 
-  const { player1Time, player2Time, startTimer, pauseTimer, formatTime, setLastActivePlayer } = useGameTimer(300);
+  const { player1Time, player2Time, startTimer, pauseTimer, formatTime, setLastActivePlayer } =
+    useGameTimer(300);
 
   const isAnimating = animatingPaths.length > 0;
 
+  // --- AI Move (opponent is currentPlayer 1) ---
   useEffect(() => {
     if (gameState.currentPlayer === 1 && !gameState.isGameOver && !isAnimating) {
       const validMoves = getValidMoves(gameState);
       if (validMoves.length === 0) return;
-      const aiMove = validMoves.reduce((best, pit) => gameState.board[pit] > gameState.board[best] ? pit : best);
+      const aiMove = validMoves.reduce((best, pit) =>
+        gameState.board[pit] > gameState.board[best] ? pit : best
+      );
       const timerId = setTimeout(() => {
         setBoardBeforeMove(gameState.board);
         const moveResult = calculateMoveResult(gameState, aiMove);
@@ -54,6 +62,7 @@ export const AyoGame: React.FC<AyoGameProps> = ({ initialGameState, onPitPress, 
     }
   }, [gameState, isAnimating]);
 
+  // --- Timer management ---
   useEffect(() => {
     if (gameState.isGameOver) {
       pauseTimer();
@@ -69,42 +78,35 @@ export const AyoGame: React.FC<AyoGameProps> = ({ initialGameState, onPitPress, 
     } else if (gameState.currentPlayer === 2) {
       startTimer();
     }
-  }, [gameState.currentPlayer, gameState.isGameOver, isAnimating, setLastActivePlayer, pauseTimer, startTimer]);
+  }, [gameState.currentPlayer, gameState.isGameOver, isAnimating]);
 
-  useEffect(() => {
-    const handleTimeout = (winner: 1 | 2) => {
-      const winnerName = winner === 2 ? "Player" : "Opponent";
-      const loserName = winner === 2 ? "Opponent" : "Player";
-      Alert.alert("Time's Up!", `${loserName} ran out of time. ${winnerName} wins!`);
-      setGameState(prev => ({ ...prev, isGameOver: true, currentPlayer: winner }));
-    };
-    if (player1Time <= 0) handleTimeout(2);
-    if (player2Time <= 0) handleTimeout(1);
-  }, [player1Time, player2Time]);
+  const handlePlayerMove = useCallback(
+    (pitIndex: number) => {
+      if (gameState.currentPlayer !== 2 || isAnimating) return;
+      pauseTimer();
+      setBoardBeforeMove(gameState.board);
+      const moveResult = calculateMoveResult(gameState, pitIndex);
+      setAnimatingPaths(moveResult.animationPaths);
+      setCaptures(moveResult.captures);
+      setGameState(moveResult.nextState);
 
-  const handlePlayerMove = useCallback((pitIndex: number) => {
-    if (gameState.currentPlayer !== 2 || isAnimating) return;
-    pauseTimer();
-    setBoardBeforeMove(gameState.board);
-    const moveResult = calculateMoveResult(gameState, pitIndex);
-    setAnimatingPaths(moveResult.animationPaths);
-    setCaptures(moveResult.captures);
-    setGameState(moveResult.nextState);
+      if (onPitPress) onPitPress(pitIndex);
+    },
+    [gameState, isAnimating]
+  );
 
-    // also call parent's onPitPress if provided
-    if (onPitPress) onPitPress(pitIndex);
-  }, [gameState, isAnimating, pauseTimer, onPitPress]);
-
-
-  const handleCaptureDuringAnimation = useCallback((pitIndex: number) => {
-    const captureInfo = captures.find((c) => c.pitIndex === pitIndex);
-    if (!captureInfo) return;
-    setGameState(prevState => {
-      const newScores = { ...prevState.scores };
-      newScores[captureInfo.awardedTo] += 4;
-      return { ...prevState, scores: newScores };
-    });
-  }, [captures]);
+  const handleCaptureDuringAnimation = useCallback(
+    (pitIndex: number) => {
+      const captureInfo = captures.find((c) => c.pitIndex === pitIndex);
+      if (!captureInfo) return;
+      setGameState((prevState) => {
+        const newScores = { ...prevState.scores };
+        newScores[captureInfo.awardedTo] += 4;
+        return { ...prevState, scores: newScores };
+      });
+    },
+    [captures]
+  );
 
   const handleAnimationEnd = useCallback(() => {
     setAnimatingPaths([]);
@@ -112,34 +114,69 @@ export const AyoGame: React.FC<AyoGameProps> = ({ initialGameState, onPitPress, 
   }, []);
 
   const memoizedPaths = useMemo(() => animatingPaths, [animatingPaths]);
-  const memoizedCaptures = useMemo(() => captures.map(c => c.pitIndex), [captures]);
+  const memoizedCaptures = useMemo(() => captures.map((c) => c.pitIndex), [captures]);
+
+  // --- Compute result for GameOver popup ---
+  let result: "win" | "loss" | "draw" | null = null;
+  if (gameState.isGameOver) {
+    if (gameState.scores[2] > gameState.scores[1]) result = "win";
+    else if (gameState.scores[1] > gameState.scores[2]) result = "loss";
+    else result = "draw";
+  }
 
   return (
-    <View style={styles.container as StyleProp<ViewStyle>}>
-      <View style={styles.profileContainer as StyleProp<ViewStyle>}>
-        <GamePlayerProfile {...opponent} score={gameState.scores[1]} timeLeft={formatTime(player1Time)} isActive={gameState.currentPlayer === 1 && !isAnimating} country={opponent.country || 'NG'} rating={opponent.rating || 1200} />
+    <View style={styles.container}>
+      <View style={styles.profileContainer}>
+        <GamePlayerProfile
+          {...opponent}
+          score={gameState.scores[1]}
+          timeLeft={formatTime(player1Time)}
+          isActive={gameState.currentPlayer === 1 && !isAnimating}
+          country={opponent.country || "NG"}
+          rating={opponent.rating || 1200}
+        />
       </View>
-      <View style={styles.boardContainer as StyleProp<ViewStyle>}>
-        <AyoSkiaImageBoard board={gameState.board} boardBeforeMove={boardBeforeMove} onPitPress={handlePlayerMove} animatingPaths={memoizedPaths} captures={memoizedCaptures} onAnimationEnd={handleAnimationEnd} onCaptureDuringAnimation={handleCaptureDuringAnimation} />
+
+      <View style={styles.boardContainer}>
+        <AyoSkiaImageBoard
+          board={gameState.board}
+          boardBeforeMove={boardBeforeMove}
+          onPitPress={handlePlayerMove}
+          animatingPaths={memoizedPaths}
+          captures={memoizedCaptures}
+          onAnimationEnd={handleAnimationEnd}
+          onCaptureDuringAnimation={handleCaptureDuringAnimation}
+        />
       </View>
-      <View style={styles.profileContainer as StyleProp<ViewStyle>}>
-        <GamePlayerProfile {...player} score={gameState.scores[2]} timeLeft={formatTime(player2Time)} isActive={gameState.currentPlayer === 2 && !isAnimating} country={player.country || 'NG'} rating={player.rating || 1200} />
+
+      <View style={styles.profileContainer}>
+        <GamePlayerProfile
+          {...player}
+          score={gameState.scores[2]}
+          timeLeft={formatTime(player2Time)}
+          isActive={gameState.currentPlayer === 2 && !isAnimating}
+          country={player.country || "NG"}
+          rating={player.rating || 1200}
+        />
       </View>
-      {gameState.isGameOver && (
-        <Text style={styles.gameOver as StyleProp<TextStyle>}>
-          Game Over! Winner:{" "}
-          {gameState.scores[2] > gameState.scores[1] ? player.name : gameState.scores[1] > gameState.scores[2] ? opponent.name : "Draw"}
-        </Text>
+
+      {result && (
+        <AyoGameOver
+          result={result}
+          playerName={player.name}
+          opponentName={opponent.name}
+          onRematch={() => setGameState(initializeGame())}
+          onNewBattle={() => setGameState(initializeGame())}
+        />
       )}
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'space-between', padding: 10, backgroundColor: '#222' },
-  profileContainer: { alignItems: 'center', marginBottom: 12 },
-  boardContainer: { flex: 1, justifyContent: 'center' },
-  gameOver: { color: 'white', fontSize: 18, textAlign: 'center', marginTop: 10 },
+  container: { flex: 1, justifyContent: "space-between", padding: 10, backgroundColor: "#222" },
+  profileContainer: { alignItems: "center", marginBottom: 12 },
+  boardContainer: { flex: 1, justifyContent: "center" },
 });
 
-
+export default AyoGame;
