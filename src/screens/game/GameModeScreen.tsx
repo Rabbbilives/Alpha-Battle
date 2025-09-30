@@ -9,8 +9,7 @@ import { ToastProvider } from '@/src/hooks/useToast';
 // Import game screens
 // import { ChessGameScreen } from '../../games/chess/screens/ChessGameScreen';
 import AyoIndex from '../../games/ayo/mode/index';
-// Import other game screens here as they are created
-// import WhotScreen from '../../games/whot/screens/WhotScreen';
+import WhotIndex from '../../games/whot/mode/index';
 // import LudoScreen from '../../games/ludo/screens/LudoScreen';
 // import DraughtsScreen from '../../games/droughts/screens/DraughtsScreen';
 // import CardsScreen from '../../games/cards/screens/CardsScreen';
@@ -34,8 +33,8 @@ export default function GameModeScreen() {
       case 'ayo':
         return <AyoIndex mode={mode} />;
       // Add cases for other games here
-      // case 'whot':
-      //   return <WhotScreen mode={mode} />;
+       case 'whot':
+        return <WhotIndex mode={mode} />;
       // case 'ludo':
       //   return <LudoScreen mode={mode} />;
       // case 'droughts':

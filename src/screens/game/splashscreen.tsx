@@ -17,7 +17,7 @@ const SplashScreen = () => {
     const timer = setTimeout(() => {
       // ✅ Now we have logic to decide where to go
       if (isAuthenticated) {
-        navigation.replace("Home"); // User is logged in, go to the main app
+        navigation.replace("Home"); // User is logged in, go 
       } else {
         navigation.replace("Auth"); // User is not logged in, go to the login/signup screens
       }
