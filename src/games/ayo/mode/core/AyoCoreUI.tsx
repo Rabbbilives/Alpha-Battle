@@ -11,12 +11,14 @@ import {
 } from "./AyoCoreLogic";
 import { useGameTimer } from "@/src/hooks/useGameTimer";
 import AyoGameOver from "../computer/AyoGameOver"; // ✅ import overlay
+import { usePlayerProfile } from '@/src/hooks/usePlayerProfile';
 
 type AyoGameProps = {
   initialGameState?: AyoGameState;
   onPitPress?: (pitIndex: number) => void;
   player?: { name: string; country?: string; rating?: number; isAI?: boolean };
   opponent?: { name: string; country?: string; rating?: number; isAI?: boolean };
+  onGameStatsUpdate?: (result: 'win' | 'loss' | 'draw', newRating: number) => void;
 };
 
 export const AyoGame: React.FC<AyoGameProps> = ({
@@ -24,7 +26,9 @@ export const AyoGame: React.FC<AyoGameProps> = ({
   onPitPress,
   player: propPlayer,
   opponent: propOpponent,
+  onGameStatsUpdate,
 }) => {
+  const { updateGameStats } = usePlayerProfile();
   const [gameState, setGameState] = useState<AyoGameState>(
     initialGameState ?? initializeGame()
   );
@@ -124,6 +128,14 @@ export const AyoGame: React.FC<AyoGameProps> = ({
     else result = "draw";
   }
 
+  const handleGameStatsUpdate = useCallback((result: 'win' | 'loss' | 'draw', newRating: number) => {
+    if (onGameStatsUpdate) {
+      onGameStatsUpdate(result, newRating);
+    }
+    // Also update through the hook for local state management
+    updateGameStats(result, newRating);
+  }, [onGameStatsUpdate, updateGameStats]);
+
   return (
     <View style={styles.container}>
       <View style={styles.profileContainer}>
@@ -167,6 +179,8 @@ export const AyoGame: React.FC<AyoGameProps> = ({
           opponentName={opponent.name}
           onRematch={() => setGameState(initializeGame())}
           onNewBattle={() => setGameState(initializeGame())}
+          playerRating={player.rating || 1200}
+          onStatsUpdate={handleGameStatsUpdate}
         />
       )}
     </View>

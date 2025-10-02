@@ -12,6 +12,7 @@ export interface UserProfile {
   avatar?: string;
   country?: string;
   mcoin?: number;
+  rating?: number; // Added top-level rating
   gameStats?: Array<{
     gameId: string;
     wins: number;
@@ -21,10 +22,60 @@ export interface UserProfile {
   }>;
 }
 
+export interface GameStats {
+  id: string;
+  gameId: string;
+  wins: number;
+  losses: number;
+  draws: number;
+  rating: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AuthResponse {
   token: string;
   user: UserProfile;
 }
+
+// New functions to be added to authService.ts
+export const fetchGameStats = async (token: string, gameId: string): Promise<GameStats> => {
+  try {
+    const response = await api.get<{ gameStats: GameStats }>(`/auth/game-stats/${gameId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data.gameStats;
+  } catch (error: any) {
+    throw new Error(error.response?.data?.error || "Failed to fetch game statistics.");
+  }
+};
+
+export const updateGameStats = async (
+  token: string,
+  gameId: string,
+  stats: Partial<{ wins: number; losses: number; draws: number; rating: number }>
+): Promise<GameStats> => {
+  try {
+    const response = await api.put<{ gameStats: GameStats }>(`/auth/game-stats/${gameId}`, stats, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data.gameStats;
+  } catch (error: any) {
+    throw new Error(error.response?.data?.error || "Failed to update game statistics.");
+  }
+};
+
+export const fetchAllGameStats = async (token: string): Promise<{ allGameStats: GameStats[] }> => {
+  try {
+    const response = await api.get<{ allGameStats: GameStats[] }>('/auth/game-stats/all', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data;
+  } catch (error: any) {
+    throw new Error(error.response?.data?.error || "Failed to fetch all game statistics.");
+  }
+};
+
 
 // --- Create a configured Axios instance ---
 const api = axios.create({

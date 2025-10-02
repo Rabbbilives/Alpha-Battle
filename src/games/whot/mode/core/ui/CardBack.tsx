@@ -7,8 +7,8 @@ interface CardBackProps {
 }
 
 export const CardBack = ({ width = 100, height = 150 }: CardBackProps) => {
-  const font = useFont(require('../assets/fonts/HelveticaBold.ttf'), 20); // Font for "Whot" text
-  const smallFont = useFont(require('../assets/fonts/HelveticaBold.ttf'), 12); // Smaller font for "Whot" on back
+  const font = useFont(require('../../../../../assets/fonts/SpaceMono-Regular.ttf'), 20); // Font for "Whot" text
+  const smallFont = useFont(require('../../../../../assets/fonts/SpaceMono-Regular.ttf'), 12); // Smaller font for "Whot" on back
 
   if (!font || !smallFont) {
     return null;

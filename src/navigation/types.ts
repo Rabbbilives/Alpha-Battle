@@ -28,13 +28,17 @@ export type Player = {
   mcoin?: number;
 };
 
-export type GameStats = {
+export interface GameStats {
+  id: string;
   gameId: string;
   wins: number;
   losses: number;
   draws: number;
   rating: number;
-};
+  createdAt: string;
+  updatedAt: string;
+}
+
 
 export type EnhancedUserProfile = {
   id: string;

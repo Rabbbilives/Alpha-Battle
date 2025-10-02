@@ -1,8 +1,9 @@
 // Alpha-Battle/src/games/ayo/mode/computer/AyoGameOver.tsx
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ComputerLevel } from './AyoComputerLogic';
+import { usePlayerProfile } from '../../../../hooks/usePlayerProfile';
 
 const levels = [
   { label: "Apprentice (Easy)", value: 1, rating: 1250, reward: 10 },
@@ -23,6 +24,7 @@ interface AyoGameOverProps {
   playerName: string;
   opponentName: string;
   playerRating: number; // ✅ NEW
+  onStatsUpdate?: (result: 'win' | 'loss' | 'draw', newRating: number) => void;
 }
 
 const AyoGameOver: React.FC<AyoGameOverProps> = ({
@@ -33,7 +35,9 @@ const AyoGameOver: React.FC<AyoGameOverProps> = ({
   playerName,
   opponentName,
   playerRating, // ✅ use it
+  onStatsUpdate,
 }) => {
+  const { updateGameStats, isLoading } = usePlayerProfile();
   const isWin = result === 'win';
   const isLoss = result === 'loss';
   const isDraw = result === 'draw';
@@ -50,6 +54,12 @@ const AyoGameOver: React.FC<AyoGameOverProps> = ({
       newRating: playerRating + total, // ✅ profile rating + reward + bonus
     };
   }, [level, isWin, playerRating]);
+
+  useEffect(() => {
+    if (result && onStatsUpdate) {
+      onStatsUpdate(result, newRating);
+    }
+  }, [result, newRating, onStatsUpdate]);
 
   return (
     <View style={styles.overlay}>
@@ -173,5 +183,6 @@ const styles = StyleSheet.create({
   newBattleButton: { backgroundColor: '#666' },
   buttonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
 });
+
 
 export default AyoGameOver;
