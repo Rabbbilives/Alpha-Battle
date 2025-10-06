@@ -93,13 +93,17 @@ export default function ProfileScreen({ isOwnProfile: propIsOwnProfile }: Profil
           DEFAULT_GAMES.map(async (game) => {
             try {
               const stat = await fetchGameStats(token, game.id);
-              return stat;
+              console.log('KILO_DEBUG: Raw stat from fetchGameStats for', game.id, ':', stat); // Log 5
+              return {
+                ...stat,
+                title: game.title, // Add the title from DEFAULT_GAMES
+              };
             } catch (error) {
               // Return a GameStats object with default values and a placeholder ID
               return {
                 id: `temp-${game.id}`, // Placeholder ID
                 gameId: game.id,
-                title: game.title,
+                title: game.title, // Ensure title is present even on error
                 wins: 0,
                 losses: 0,
                 draws: 0,
@@ -112,6 +116,7 @@ export default function ProfileScreen({ isOwnProfile: propIsOwnProfile }: Profil
           })
         );
         setGameStats(allStats);
+        console.log('KILO_DEBUG: Fetched game stats:', allStats); // Log 1
         if (allStats.length > 0) {
           setSelectedGameId(allStats[0].gameId);
         }
@@ -119,18 +124,21 @@ export default function ProfileScreen({ isOwnProfile: propIsOwnProfile }: Profil
         console.error('Failed to fetch game stats:', error);
         if (playerToShow && playerToShow.gameStats) {
           // Map existing gameStats to the GameStats interface
-          const mappedGameStats: GameStats[] = playerToShow.gameStats.map((stat: any) => ({
-            id: stat.id || `temp-${stat.gameId}`, // Use existing ID or generate placeholder
-            gameId: stat.gameId,
-            title: DEFAULT_GAMES.find(g => g.id === stat.gameId)?.title || stat.gameId, // Find title or use gameId
-            wins: stat.wins,
-            losses: stat.losses,
-            draws: stat.draws,
-            rating: stat.rating,
-            createdAt: stat.createdAt || new Date().toISOString(),
-            updatedAt: stat.updatedAt || new Date().toISOString(),
-            hasExistingStats: true,
-          }));
+          const mappedGameStats: GameStats[] = playerToShow.gameStats.map((stat: { id?: string; gameId: string; wins: number; losses: number; draws: number; rating: number; }) => {
+            const gameTitle = DEFAULT_GAMES.find(g => g.id === stat.gameId)?.title || stat.gameId;
+            return {
+              id: stat.id || `temp-${stat.gameId}`, // Use existing ID or generate placeholder
+              gameId: stat.gameId,
+              title: gameTitle,
+              wins: stat.wins,
+              losses: stat.losses,
+              draws: stat.draws,
+              rating: stat.rating,
+              createdAt: new Date().toISOString(), // Placeholder date
+              updatedAt: new Date().toISOString(), // Placeholder date
+              hasExistingStats: true,
+            };
+          });
           setGameStats(mappedGameStats);
           if (mappedGameStats.length > 0) {
             setSelectedGameId(mappedGameStats[0].gameId);
@@ -138,6 +146,7 @@ export default function ProfileScreen({ isOwnProfile: propIsOwnProfile }: Profil
         }
       } finally {
         setGameStatsLoading(false);
+        console.log('KILO_DEBUG: Game stats loading finished. gameStatsLoading:', false); // Log 2
       }
     };
 
@@ -199,24 +208,28 @@ export default function ProfileScreen({ isOwnProfile: propIsOwnProfile }: Profil
   const avatar = playerToShow.avatar ?? null;
   const name = playerToShow.name ?? 'Unknown Player';
   const country = playerToShow.country ?? '';
-  const totalRating = gameStats.length > 0 ? gameStats.reduce((sum: number, stat: GameStats) => sum + (stat.rating || 1000), 0) / gameStats.length : 1000;
+
+  const statsToRender = gameStats.length > 0 ? gameStats : (playerToShow?.gameStats || []).map((stat: { id?: string; gameId: string; wins: number; losses: number; draws: number; rating: number; }) => {
+    const gameTitle = DEFAULT_GAMES.find(g => g.id === stat.gameId)?.title || stat.gameId;
+    return {
+      id: stat.id || `temp-${stat.gameId}`,
+      gameId: stat.gameId,
+      title: gameTitle,
+      wins: stat.wins,
+      losses: stat.losses,
+      draws: stat.draws,
+      rating: stat.rating,
+      createdAt: new Date().toISOString(), // Placeholder date
+      updatedAt: new Date().toISOString(), // Placeholder date
+      hasExistingStats: true,
+    };
+  });
+  const selectedGame = statsToRender.find((stat: GameStats) => stat.gameId === selectedGameId);
+
+  const totalRating = selectedGame ? selectedGame.rating : (playerToShow.rating ?? 1000);
   const rank = getRankFromRating(totalRating);
   const mcoin = playerToShow.mcoin ?? 0;
   const showMCoin = rank && ['Warrior', 'Master', 'Alpha'].includes(rank?.level ?? '');
-
-  const statsToRender = gameStats.length > 0 ? gameStats : (playerToShow?.gameStats || []).map((stat: any) => ({
-    id: stat.id || `temp-${stat.gameId}`,
-    gameId: stat.gameId,
-    title: DEFAULT_GAMES.find(g => g.id === stat.gameId)?.title || stat.gameId,
-    wins: stat.wins,
-    losses: stat.losses,
-    draws: stat.draws,
-    rating: stat.rating,
-    createdAt: stat.createdAt || new Date().toISOString(),
-    updatedAt: stat.updatedAt || new Date().toISOString(),
-    hasExistingStats: true,
-  }));
-  const selectedGame = statsToRender.find((stat: GameStats) => stat.gameId === selectedGameId);
 
 
   return (
@@ -256,13 +269,7 @@ export default function ProfileScreen({ isOwnProfile: propIsOwnProfile }: Profil
             </View>
           )}
           {/* Display M-Coin if available */}
-          {showMCoin && (
-            <View style={styles.mCoinBlock}>
-              <Medal size={24} color="#6B46C1" />
-              <Text style={styles.coinHeader}>M-Coin</Text>
-              <Text style={styles.coinValue}>{mcoin}</Text>
-            </View>
-          )}
+          
         </View>
 
         {/* --- Tappable Game Stats List --- */}
@@ -274,23 +281,27 @@ export default function ProfileScreen({ isOwnProfile: propIsOwnProfile }: Profil
             ) : statsToRender.length === 0 ? (
               <Text style={styles.noGamesText}>No games played yet</Text>
             ) : (
-              statsToRender.map((s: any) => (
-                <TouchableOpacity
-                  key={s.gameId}
-                  style={[
-                    styles.gameChip,
-                    selectedGameId === s.gameId && styles.selectedGameChip
-                  ]}
-                  onPress={() => setSelectedGameId(s.gameId)}
-                >
-                  <Text style={[
-                    styles.gameChipText,
-                    selectedGameId === s.gameId && styles.selectedGameChipText
-                  ]}>
-                    {s.title}
-                  </Text>
-                </TouchableOpacity>
-              ))
+              <>
+                {statsToRender.map((s: GameStats) => {
+                  return (
+                    <TouchableOpacity
+                      key={s.gameId}
+                      style={[
+                        styles.gameChip,
+                        selectedGameId === s.gameId && styles.selectedGameChip
+                      ]}
+                      onPress={() => setSelectedGameId(s.gameId)}
+                    >
+                      <Text style={[
+                        styles.gameChipText,
+                        selectedGameId === s.gameId && styles.selectedGameChipText
+                      ]}>
+                        {s.title}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </>
             )}
           </ScrollView>
         </View>

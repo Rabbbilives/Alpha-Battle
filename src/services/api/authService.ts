@@ -14,6 +14,7 @@ export interface UserProfile {
   mcoin?: number;
   rating?: number; // Added top-level rating
   gameStats?: Array<{
+    id?: string; // Added optional id property
     gameId: string;
     wins: number;
     losses: number;
