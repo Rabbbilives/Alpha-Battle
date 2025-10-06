@@ -6,8 +6,7 @@ import { calculateMoveResult } from "../core/AyoCoreLogic";
 import { AyoGame } from "../core/AyoCoreUI";
 import { usePlayerProfile } from '@/src/hooks/usePlayerProfile';
 import AyoGameOver from "./AyoGameOver";
-import { updateUserRcoin } from '@/src/store/slices/userSlice';
-import { useAppDispatch } from '@/src/store/hooks'; 
+import { useAppDispatch } from '@/src/store/hooks';
 
 const levels = [
   { label: "Apprentice (Easy)", value: 1, rating: 1250, reward: 10 },
@@ -26,7 +25,7 @@ export default function AyoComputerUI() {
   const [aiThinking, setAiThinking] = useState(false);
   
   // --- FIX: Destructure the player profile and the new isLoading flag ---
-  const playerProfile = usePlayerProfile();
+  const playerProfile = usePlayerProfile('ayo'); // Assuming 'ayo' is the gameId
  const dispatch = useAppDispatch();
   const [isAnimating, setIsAnimating] = useState(false);
   const [pendingMove, setPendingMove] = useState<{ player: 1 | 2; pit: number } | null>(null);
@@ -158,8 +157,9 @@ export default function AyoComputerUI() {
                     <AyoGame
                         initialGameState={gameState.game}
                         onPitPress={handleMove}
-                        opponent={opponent}
+                        opponent={opponent || { name: 'AI', country: 'NG', rating: 1000, isAI: true }} // Provide a default opponent
                         player={playerProfile} // using the simplified playerProfile object
+                        level={level || 1} // Provide a default level if null
                     />
 
           {aiThinking && <ActivityIndicator size="large" color="#fff" style={{ marginTop: 10 }} />}
@@ -171,7 +171,7 @@ export default function AyoComputerUI() {
   onRematch={handleRematch}
   onNewBattle={handleNewBattle}
   playerName={playerProfile.name}
-  opponentName={opponent.name}
+  opponentName={opponent?.name || 'AI'}
   playerRating={playerProfile.rating} // ✅ pass rating
 />
 

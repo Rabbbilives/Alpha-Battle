@@ -33,14 +33,33 @@ export const signUpUser = createAsyncThunk(
 // Thunk for fetching the user profile
 export const fetchUserProfile = createAsyncThunk(
   'user/fetchProfile',
-  async (_, { getState, rejectWithValue }) => {
+  async (userId: string | undefined, { getState, rejectWithValue }) => {
     try {
       const token = (getState() as RootState).auth.token;
       if (!token) {
         return rejectWithValue('No token found');
       }
-      const profile = await api.getProfile(token);
+      const profile = await api.getProfile(token, userId);
       return profile;
+    } catch (error: any) {
+      return rejectWithValue(error.message);
+    }
+  }
+);
+
+export const updateUserProfileAndGameStatsThunk = createAsyncThunk(
+  'user/updateProfileAndGameStats',
+  async (
+    { gameId, updatedStats }: { gameId: string; updatedStats: { wins: number; losses: number; draws: number; rating: number; overallRating: number } },
+    { getState, rejectWithValue }
+  ) => {
+    try {
+      const token = (getState() as RootState).auth.token;
+      if (!token) {
+        return rejectWithValue('No token found');
+      }
+      const updatedUser = await api.updateUserProfileAndGameStats(token, gameId, updatedStats);
+      return updatedUser;
     } catch (error: any) {
       return rejectWithValue(error.message);
     }

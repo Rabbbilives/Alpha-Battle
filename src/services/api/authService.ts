@@ -25,12 +25,14 @@ export interface UserProfile {
 export interface GameStats {
   id: string;
   gameId: string;
+  title: string; // Added title property
   wins: number;
   losses: number;
   draws: number;
   rating: number;
   createdAt: string;
   updatedAt: string;
+  hasExistingStats?: boolean; // Optional property for client-side logic
 }
 
 export interface AuthResponse {
@@ -95,6 +97,30 @@ export const signIn = async (email: string, password: string): Promise<AuthRespo
   }
 };
 
+export const updateUserProfileAndGameStats = async (
+  token: string,
+  gameId: string,
+  updatedStats: { wins: number; losses: number; draws: number; rating: number; overallRating: number }
+): Promise<UserProfile> => {
+  try {
+    // Update game-specific stats
+    await updateGameStats(token, gameId, {
+      wins: updatedStats.wins,
+      losses: updatedStats.losses,
+      draws: updatedStats.draws,
+      rating: updatedStats.rating,
+    });
+
+    // Update overall user profile rating
+    const response = await api.put<{ user: UserProfile }>("/auth/profile", { rating: updatedStats.overallRating }, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return response.data.user;
+  } catch (error: any) {
+    throw new Error(error.response?.data?.error || "Failed to update user profile and game statistics.");
+  }
+};
+
 // ✅ --- ADD THIS NEW FUNCTION ---
 export const signUp = async (name: string, email: string, password: string): Promise<AuthResponse> => {
   try {
@@ -106,9 +132,10 @@ export const signUp = async (name: string, email: string, password: string): Pro
 };
 // ------------------------------
 
-export const getProfile = async (token: string): Promise<UserProfile> => {
+export const getProfile = async (token: string, userId?: string): Promise<UserProfile> => {
   try {
-    const response = await api.get<{ user: UserProfile }>("/auth/profile", {
+    const url = userId ? `/auth/profile/${userId}` : "/auth/profile";
+    const response = await api.get<{ user: UserProfile }>(url, {
       headers: {
         Authorization: `Bearer ${token}`,
       },

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useNavigation } from '@react-navigation/native'; // Import useNavigation
 import { View, StyleSheet } from "react-native";
 import { AyoSkiaImageBoard } from "./AyoSkiaBoard";
 import GamePlayerProfile from "./GamePlayerProfile";
@@ -19,6 +20,7 @@ type AyoGameProps = {
   player?: { name: string; country?: string; rating?: number; isAI?: boolean };
   opponent?: { name: string; country?: string; rating?: number; isAI?: boolean };
   onGameStatsUpdate?: (result: 'win' | 'loss' | 'draw', newRating: number) => void;
+  level?: import('../computer/AyoComputerLogic').ComputerLevel; // Add level prop with correct type
 };
 
 export const AyoGame: React.FC<AyoGameProps> = ({
@@ -27,11 +29,15 @@ export const AyoGame: React.FC<AyoGameProps> = ({
   player: propPlayer,
   opponent: propOpponent,
   onGameStatsUpdate,
+  level,
 }) => {
-  const { updateGameStats } = usePlayerProfile();
+  // No longer need updateGameStats directly here as it's handled in AyoGameOver
+  // const { updateGameStats } = usePlayerProfile('ayo');
+  const navigation = useNavigation(); // Initialize navigation
   const [gameState, setGameState] = useState<AyoGameState>(
     initialGameState ?? initializeGame()
   );
+  const [showGameOver, setShowGameOver] = useState(false); // New state for controlling overlay visibility
   const [boardBeforeMove, setBoardBeforeMove] = useState<number[]>(gameState.board);
   const [animatingPaths, setAnimatingPaths] = useState<number[][]>([]);
   const [captures, setCaptures] = useState<Capture[]>([]);
@@ -70,6 +76,7 @@ export const AyoGame: React.FC<AyoGameProps> = ({
   useEffect(() => {
     if (gameState.isGameOver) {
       pauseTimer();
+      setShowGameOver(true); // Show the game over overlay
       return;
     }
     if (isAnimating) {
@@ -128,13 +135,14 @@ export const AyoGame: React.FC<AyoGameProps> = ({
     else result = "draw";
   }
 
-  const handleGameStatsUpdate = useCallback((result: 'win' | 'loss' | 'draw', newRating: number) => {
-    if (onGameStatsUpdate) {
-      onGameStatsUpdate(result, newRating);
-    }
-    // Also update through the hook for local state management
-    updateGameStats(result, newRating);
-  }, [onGameStatsUpdate, updateGameStats]);
+  // Removed handleGameStatsUpdate as it's now handled directly in AyoGameOver
+  // const handleGameStatsUpdate = useCallback((result: 'win' | 'loss' | 'draw', newRating: number) => {
+  //   if (onGameStatsUpdate) {
+  //     onGameStatsUpdate(result, newRating);
+  //   }
+  //   // Also update through the hook for local state management
+  //   updateGameStats(result, newRating);
+  // }, [onGameStatsUpdate, updateGameStats]);
 
   return (
     <View style={styles.container}>
@@ -172,15 +180,21 @@ export const AyoGame: React.FC<AyoGameProps> = ({
         />
       </View>
 
-      {result && (
+      {result && showGameOver && ( // Conditionally render based on showGameOver state
         <AyoGameOver
           result={result}
           playerName={player.name}
           opponentName={opponent.name}
-          onRematch={() => setGameState(initializeGame())}
-          onNewBattle={() => setGameState(initializeGame())}
           playerRating={player.rating || 1200}
-          onStatsUpdate={handleGameStatsUpdate}
+          level={level} // Pass level prop
+          onRematch={() => {
+            setGameState(initializeGame());
+            setShowGameOver(false); // Hide the overlay
+          }}
+          onNewBattle={() => {
+            setShowGameOver(false); // Hide the overlay
+            navigation.goBack(); // Navigate back to the previous screen (e.g., game selection)
+          }}
         />
       )}
     </View>

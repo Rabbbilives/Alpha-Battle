@@ -18,98 +18,134 @@ import { fetchUserProfile } from '@/src/store/thunks/authThunks';
 import { getFlagEmoji } from '../../utils/flags';
 import { getRankFromRating } from '../../utils/rank';
 import { Medal, ArrowLeft, User } from 'lucide-react-native';
-import { getGameStats } from '@/src/services/api/authService';
+import { fetchGameStats, UserProfile, GameStats } from '@/src/services/api/authService';
 
 type ProfileScreenProps = {
-  isOwnProfile: boolean;
+  isOwnProfile?: boolean; // Made optional as it might be passed via route params
 };
 
 // Define the navigation and route prop types for this screen
 type ProfileScreenNavigationProp = NavigationProp<RootStackParamList>;
-type ProfileScreenRouteProp = RouteProp<RootStackParamList, 'Profile'>;
+type ProfileScreenRouteProp = RouteProp<RootStackParamList, 'profile'>;
 
-export default function ProfileScreen({ isOwnProfile = true }: ProfileScreenProps) {
+export default function ProfileScreen({ isOwnProfile: propIsOwnProfile }: ProfileScreenProps) {
   const navigation = useNavigation<ProfileScreenNavigationProp>();
   const route = useRoute<ProfileScreenRouteProp>();
   const dispatch = useAppDispatch();
+
+  // Determine if it's the user's own profile based on prop or route params
+  const isOwnProfile = propIsOwnProfile ?? (route.params?.userId === undefined);
 
   // --- SINGLE SOURCE OF TRUTH: REDUX ---
   const { token } = useAppSelector((state) => state.auth);
   const { profile: reduxProfile, loading: userLoading, error: userError } = useAppSelector((state) => state.user);
 
+  // State for other player's profile
+  const [otherPlayerProfile, setOtherPlayerProfile] = useState<UserProfile | null>(null);
+  const [otherPlayerLoading, setOtherPlayerLoading] = useState(false);
+  const [otherPlayerError, setOtherPlayerError] = useState<string | null>(null);
+
   // New state to manage the selected game for detailed stats
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
-  const [gameStats, setGameStats] = useState<any[]>([]);
+  const [gameStats, setGameStats] = useState<GameStats[]>([]);
   const [gameStatsLoading, setGameStatsLoading] = useState(false);
+
+  const { userId } = route.params || {};
 
   useEffect(() => {
     if (isOwnProfile && token && !reduxProfile) {
-      dispatch(fetchUserProfile());
+      dispatch(fetchUserProfile(undefined)); // Fetch own profile
+    } else if (!isOwnProfile && userId && token && !otherPlayerProfile) {
+      setOtherPlayerLoading(true);
+      dispatch(fetchUserProfile(userId))
+        .unwrap()
+        .then((profile) => {
+          setOtherPlayerProfile(profile);
+          setOtherPlayerLoading(false);
+        })
+        .catch((error) => {
+          setOtherPlayerError(error);
+          setOtherPlayerLoading(false);
+        });
     }
-  }, [isOwnProfile, token, reduxProfile, dispatch]);
+  }, [isOwnProfile, token, reduxProfile, userId, otherPlayerProfile, dispatch]);
 
-  const playerToShow = !isOwnProfile ? (route.params as { player: any })?.player : reduxProfile;
+  const playerToShow = isOwnProfile ? reduxProfile : otherPlayerProfile;
+  const loading = isOwnProfile ? userLoading : otherPlayerLoading;
+  const error = isOwnProfile ? userError : otherPlayerError;
+
+  // Define DEFAULT_GAMES outside useEffect to be accessible
+  const DEFAULT_GAMES = [
+    { id: 'chess', title: 'Chess' },
+    { id: 'ayo', title: 'Ayo' },
+    { id: 'whot', title: 'Whot' },
+    { id: 'ludo', title: 'Ludo' },
+    { id: 'draughts', title: 'Draughts' },
+  ];
 
   useEffect(() => {
-    const fetchGameStats = async () => {
-      if (isOwnProfile && token) {
-        setGameStatsLoading(true);
-        try {
-          const DEFAULT_GAMES = [
-            { id: 'chess', title: 'Chess' },
-            { id: 'ayo', title: 'Ayo' },
-            { id: 'whot', title: 'Whot' },
-            { id: 'ludo', title: 'Ludo' },
-            { id: 'draughts', title: 'Draughts' },
-          ];
+    const fetchGameStatsForPlayer = async () => {
+      if (!playerToShow || !token) return;
 
-          const allStats = await Promise.all(
-            DEFAULT_GAMES.map(async (game) => {
-              try {
-                const stat = await getGameStats(game.id, token);
-                return stat;
-              } catch (error) {
-                return {
-                  gameId: game.id,
-                  title: game.title,
-                  wins: 0,
-                  losses: 0,
-                  draws: 0,
-                  rating: 1000,
-                  hasExistingStats: false
-                };
-              }
-            })
-          );
-          setGameStats(allStats);
-          if (allStats.length > 0) {
-            // Automatically select the first game to show stats for on load
-            setSelectedGameId(allStats[0].gameId);
-          }
-        } catch (error) {
-          console.error('Failed to fetch game stats:', error);
-          if (playerToShow && playerToShow.gameStats) {
-            setGameStats(playerToShow.gameStats);
-            if (playerToShow.gameStats.length > 0) {
-              setSelectedGameId(playerToShow.gameStats[0].gameId);
+      setGameStatsLoading(true);
+      try {
+        const allStats: GameStats[] = await Promise.all(
+          DEFAULT_GAMES.map(async (game) => {
+            try {
+              const stat = await fetchGameStats(token, game.id);
+              return stat;
+            } catch (error) {
+              // Return a GameStats object with default values and a placeholder ID
+              return {
+                id: `temp-${game.id}`, // Placeholder ID
+                gameId: game.id,
+                title: game.title,
+                wins: 0,
+                losses: 0,
+                draws: 0,
+                rating: 1000,
+                createdAt: new Date().toISOString(), // Placeholder date
+                updatedAt: new Date().toISOString(), // Placeholder date
+                hasExistingStats: false
+              } as GameStats; // Assert to GameStats
             }
+          })
+        );
+        setGameStats(allStats);
+        if (allStats.length > 0) {
+          setSelectedGameId(allStats[0].gameId);
+        }
+      } catch (error) {
+        console.error('Failed to fetch game stats:', error);
+        if (playerToShow && playerToShow.gameStats) {
+          // Map existing gameStats to the GameStats interface
+          const mappedGameStats: GameStats[] = playerToShow.gameStats.map((stat: any) => ({
+            id: stat.id || `temp-${stat.gameId}`, // Use existing ID or generate placeholder
+            gameId: stat.gameId,
+            title: DEFAULT_GAMES.find(g => g.id === stat.gameId)?.title || stat.gameId, // Find title or use gameId
+            wins: stat.wins,
+            losses: stat.losses,
+            draws: stat.draws,
+            rating: stat.rating,
+            createdAt: stat.createdAt || new Date().toISOString(),
+            updatedAt: stat.updatedAt || new Date().toISOString(),
+            hasExistingStats: true,
+          }));
+          setGameStats(mappedGameStats);
+          if (mappedGameStats.length > 0) {
+            setSelectedGameId(mappedGameStats[0].gameId);
           }
-        } finally {
-          setGameStatsLoading(false);
         }
-      } else if (playerToShow && playerToShow.gameStats) {
-        setGameStats(playerToShow.gameStats);
-        if (playerToShow.gameStats.length > 0) {
-          setSelectedGameId(playerToShow.gameStats[0].gameId);
-        }
+      } finally {
+        setGameStatsLoading(false);
       }
     };
 
-    fetchGameStats();
+    fetchGameStatsForPlayer();
   }, [isOwnProfile, playerToShow, token]);
 
   // --- RENDER LOGIC ---
-  if (userLoading) {
+  if (loading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
@@ -120,12 +156,12 @@ export default function ProfileScreen({ isOwnProfile = true }: ProfileScreenProp
     );
   }
 
-  if (userError) {
+  if (error) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centered}>
-          <Text style={styles.errorText}>Error: {userError}</Text>
-          <Button title="Retry" onPress={() => dispatch(fetchUserProfile())} />
+          <Text style={styles.errorText}>Error: {error}</Text>
+          <Button title="Retry" onPress={() => dispatch(fetchUserProfile(userId))} />
         </View>
       </SafeAreaView>
     );
@@ -163,13 +199,25 @@ export default function ProfileScreen({ isOwnProfile = true }: ProfileScreenProp
   const avatar = playerToShow.avatar ?? null;
   const name = playerToShow.name ?? 'Unknown Player';
   const country = playerToShow.country ?? '';
-  const totalRating = gameStats.length > 0 ? gameStats.reduce((sum: number, stat: any) => sum + (stat.rating || 1000), 0) / gameStats.length : 1000;
+  const totalRating = gameStats.length > 0 ? gameStats.reduce((sum: number, stat: GameStats) => sum + (stat.rating || 1000), 0) / gameStats.length : 1000;
   const rank = getRankFromRating(totalRating);
   const mcoin = playerToShow.mcoin ?? 0;
   const showMCoin = rank && ['Warrior', 'Master', 'Alpha'].includes(rank?.level ?? '');
 
-  const statsToRender = gameStats.length > 0 ? gameStats : (playerToShow?.gameStats || []);
-  const selectedGame = statsToRender.find(stat => stat.gameId === selectedGameId);
+  const statsToRender = gameStats.length > 0 ? gameStats : (playerToShow?.gameStats || []).map((stat: any) => ({
+    id: stat.id || `temp-${stat.gameId}`,
+    gameId: stat.gameId,
+    title: DEFAULT_GAMES.find(g => g.id === stat.gameId)?.title || stat.gameId,
+    wins: stat.wins,
+    losses: stat.losses,
+    draws: stat.draws,
+    rating: stat.rating,
+    createdAt: stat.createdAt || new Date().toISOString(),
+    updatedAt: stat.updatedAt || new Date().toISOString(),
+    hasExistingStats: true,
+  }));
+  const selectedGame = statsToRender.find((stat: GameStats) => stat.gameId === selectedGameId);
+
 
   return (
     <SafeAreaView style={styles.container}>

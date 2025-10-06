@@ -1,7 +1,7 @@
 // src/store/slices/userSlice.ts
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { UserProfile } from "../../services/api/authService";
-import { fetchUserProfile, signInUser } from '../thunks/authThunks';
+import { fetchUserProfile, signInUser, updateUserProfileAndGameStatsThunk } from '../thunks/authThunks';
 import { logout } from './authSlice';
 
 interface UserState {
@@ -35,6 +35,14 @@ const userSlice = createSlice({
         state.profile = action.payload;
       })
       .addCase(fetchUserProfile.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      })
+      .addCase(updateUserProfileAndGameStatsThunk.fulfilled, (state, action: PayloadAction<UserProfile>) => {
+        state.loading = false;
+        state.profile = action.payload;
+      })
+      .addCase(updateUserProfileAndGameStatsThunk.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload as string;
       })

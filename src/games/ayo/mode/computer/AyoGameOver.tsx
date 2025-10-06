@@ -4,6 +4,8 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ComputerLevel } from './AyoComputerLogic';
 import { usePlayerProfile } from '../../../../hooks/usePlayerProfile';
+import { useAppDispatch, useAppSelector } from '../../../../store/hooks';
+import { updateUserProfileAndGameStatsThunk } from '../../../../store/thunks/authThunks';
 
 const levels = [
   { label: "Apprentice (Easy)", value: 1, rating: 1250, reward: 10 },
@@ -37,7 +39,9 @@ const AyoGameOver: React.FC<AyoGameOverProps> = ({
   playerRating, // ✅ use it
   onStatsUpdate,
 }) => {
-  const { updateGameStats, isLoading } = usePlayerProfile();
+  const dispatch = useAppDispatch();
+  const { profile } = useAppSelector((state) => state.user);
+  const { updateGameStats, isLoading } = usePlayerProfile('ayo'); // Assuming 'ayo' is the gameId
   const isWin = result === 'win';
   const isLoss = result === 'loss';
   const isDraw = result === 'draw';
@@ -56,10 +60,32 @@ const AyoGameOver: React.FC<AyoGameOverProps> = ({
   }, [level, isWin, playerRating]);
 
   useEffect(() => {
-    if (result && onStatsUpdate) {
-      onStatsUpdate(result, newRating);
+    if (result && profile) {
+      const gameId = 'ayo'; // Assuming 'ayo' is the gameId for this game
+      let wins = profile.gameStats?.find(s => s.gameId === gameId)?.wins || 0;
+      let losses = profile.gameStats?.find(s => s.gameId === gameId)?.losses || 0;
+      let draws = profile.gameStats?.find(s => s.gameId === gameId)?.draws || 0;
+
+      if (result === 'win') {
+        wins += 1;
+      } else if (result === 'loss') {
+        losses += 1;
+      } else if (result === 'draw') {
+        draws += 1;
+      }
+
+      dispatch(updateUserProfileAndGameStatsThunk({
+        gameId,
+        updatedStats: {
+          wins,
+          losses,
+          draws,
+          rating: newRating, // Game-specific rating
+          overallRating: newRating, // Overall user rating
+        }
+      }));
     }
-  }, [result, newRating, onStatsUpdate]);
+  }, [result, newRating, profile, dispatch]);
 
   return (
     <View style={styles.overlay}>
