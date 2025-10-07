@@ -116,7 +116,6 @@ export default function ProfileScreen({ isOwnProfile: propIsOwnProfile }: Profil
           })
         );
         setGameStats(allStats);
-        console.log('KILO_DEBUG: Fetched game stats:', allStats); // Log 1
         if (allStats.length > 0) {
           setSelectedGameId(allStats[0].gameId);
         }
@@ -146,7 +145,6 @@ export default function ProfileScreen({ isOwnProfile: propIsOwnProfile }: Profil
         }
       } finally {
         setGameStatsLoading(false);
-        console.log('KILO_DEBUG: Game stats loading finished. gameStatsLoading:', false); // Log 2
       }
     };
 

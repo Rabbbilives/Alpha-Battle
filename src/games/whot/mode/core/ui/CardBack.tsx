@@ -1,3 +1,4 @@
+// CardBack.tsx
 import React from 'react';
 import { Canvas, RoundedRect, Text, useFont, Group } from '@shopify/react-native-skia';
 

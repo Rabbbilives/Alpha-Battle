@@ -1,114 +1,142 @@
-// whot-core/game.ts
-import { Card, GameState, Player } from "./types";
+// games/whot/core/game.ts
+import { Card, GameState, Player, RuleVersion } from "./types";
 import { generateDeck, shuffleDeck } from "./deck";
-
-// Rule 1 imports
-import {
-  isValidMove as isValidMoveRule1,
-  applyCardEffect as applyCardEffectRule1,
-} from "./rules";
-
-// Rule 2 imports
-import {
-  isValidMoveRule2,
-  applyCardEffectRule2,
-} from "./rules2";
+import { isValidMove as isValidMoveRule1, applyCardEffect as applyCardEffectRule1 } from "./rules";
+import { isValidMoveRule2, applyCardEffectRule2 } from "./rules2";
 
 /**
  * Initialize a new game.
- * ruleVersion = "rule1" (default) or "rule2"
  */
 export const initGame = (
-  playerNames: string[],
-  startingHand: number = 5,
-  ruleVersion: "rule1" | "rule2" = "rule1"
+    playerNames: string[],
+    startingHand: number = 5,
+    ruleVersion: RuleVersion = "rule1"
 ): GameState => {
-  const fullDeck = shuffleDeck(generateDeck(ruleVersion));
-  const players: Player[] = playerNames.map((name, idx) => {
-    const hand = fullDeck.slice(idx * startingHand, (idx + 1) * startingHand);
-    return { id: `player-${idx}`, name, hand };
-  });
+    const fullDeck = shuffleDeck(generateDeck(ruleVersion));
+    const players: Player[] = playerNames.map((name, idx) => {
+        const hand = fullDeck.slice(idx * startingHand, (idx + 1) * startingHand);
+        return { id: `player-${idx}`, name, hand };
+    });
 
-  const dealtCards = players.length * startingHand;
-  const pile: Card[] = [fullDeck[dealtCards]];
-  const market = fullDeck.slice(dealtCards + 1);
+    const dealtCards = players.length * startingHand;
+    const market = fullDeck.slice(dealtCards); 
 
-  return {
-    players,
-    market,
-    pile,
-    currentPlayer: 0,
-    direction: 1,
-    pendingPick: 0,
-    calledSuit: undefined,
-    mustPlayNormal: false, // used in Rule 2
-  };
+    // Find the first non-special card to start the pile
+    let firstCard: Card;
+    let initialMarket: Card[];
+
+    // This logic ensures the game starts with a playable card on top
+    for(let i = 0; i < market.length; i++) {
+        const card = market[i];
+        if (![1, 2, 5, 8, 14, 20].includes(card.number)) {
+             firstCard = card;
+             initialMarket = [...market.slice(0, i), ...market.slice(i + 1)];
+             break;
+        }
+    }
+    
+    // Fallback if the entire deck is special (unlikely but safe)
+    if (!firstCard!) {
+         firstCard = market[0];
+         initialMarket = market.slice(1);
+    }
+    
+    const pile: Card[] = [firstCard!];
+
+    return {
+        players,
+        market: initialMarket!,
+        pile,
+        currentPlayer: 0,
+        direction: 1,
+        pendingPick: 0,
+        calledSuit: undefined,
+        mustPlayNormal: false, 
+        ruleVersion,
+    };
 };
 
 /**
- * Select ruleset dynamically (Rule 1 or Rule 2)
+ * Select ruleset dynamically.
  */
-const useRuleSet = (ruleVersion: "rule1" | "rule2") => {
-  return ruleVersion === "rule1"
-    ? { isValidMove: isValidMoveRule1, applyCardEffect: applyCardEffectRule1 }
-    : { isValidMove: isValidMoveRule2, applyCardEffect: applyCardEffectRule2 };
+const useRuleSet = (ruleVersion: RuleVersion) => {
+    return ruleVersion === "rule1"
+        ? { isValidMove: isValidMoveRule1, applyCardEffect: applyCardEffectRule1 }
+        : { isValidMove: isValidMoveRule2, applyCardEffect: applyCardEffectRule2 };
 };
 
 /**
  * Handle a player playing a card.
  */
 export const playCard = (
-  state: GameState,
-  playerIndex: number,
-  card: Card,
-  ruleVersion: "rule1" | "rule2" = "rule1"
+    state: GameState,
+    playerIndex: number,
+    card: Card,
+    ruleVersion: RuleVersion
 ): GameState => {
-  const player = state.players[playerIndex];
-  if (!player) throw new Error("Invalid player index");
+    const player = state.players[playerIndex];
+    if (!player) throw new Error("Invalid player index");
 
-  const { isValidMove, applyCardEffect } = useRuleSet(ruleVersion);
+    const { isValidMove, applyCardEffect } = useRuleSet(ruleVersion);
 
-  if (!isValidMove(card, state)) {
-    throw new Error("Invalid move");
-  }
+    if (!isValidMove(card, state)) {
+        throw new Error("Invalid move");
+    }
+    
+    // Apply effects, update turn, move card, and remove from hand
+    let newState = applyCardEffect(card, state, playerIndex);
 
-  return applyCardEffect(card, state, playerIndex);
+    // If the played card was a WHOT (20), the current player must now call a suit.
+    // The UI must handle the modal for the suit call and then call an update function.
+    if (card.number === 20 && ruleVersion === 'rule1') {
+        // Set currentPlayer back to the player who played Whot to wait for suit call
+        newState.currentPlayer = playerIndex; 
+    }
+
+    return newState;
 };
 
 /**
  * Handle a player picking from the market.
  */
 export const pickCard = (
-  state: GameState,
-  playerIndex: number
+    state: GameState,
+    playerIndex: number
 ): GameState => {
-  if (state.market.length === 0) throw new Error("Market is empty!");
+    if (state.market.length === 0) throw new Error("Market is empty!");
 
-  let cardsToPick = state.pendingPick || 1;
-  const drawn = state.market.slice(0, cardsToPick);
-  const market = state.market.slice(cardsToPick);
+    const newState: GameState = { ...state };
 
-  const players = state.players.map((p, idx) =>
-    idx === playerIndex ? { ...p, hand: [...p.hand, ...drawn] } : p
-  );
+    let cardsToPick = newState.pendingPick || 1;
+    
+    // Handle market depletion
+    if (cardsToPick > newState.market.length) {
+        cardsToPick = newState.market.length;
+    }
 
-  const nextPlayer =
-    (playerIndex + state.direction + state.players.length) %
-    state.players.length;
+    const drawn = newState.market.slice(0, cardsToPick);
+    newState.market = newState.market.slice(cardsToPick);
 
-  return {
-    ...state,
-    players,
-    market,
-    currentPlayer: nextPlayer,
-    pendingPick: 0,
-    mustPlayNormal: false, // reset after drawing
-  };
+    // Add cards to player's hand
+    newState.players = newState.players.map((p, idx) =>
+        idx === playerIndex ? { ...p, hand: [...p.hand, ...drawn] } : p
+    );
+
+    // Pass turn
+    const nextPlayer =
+        (playerIndex + newState.direction + newState.players.length) %
+        newState.players.length;
+
+    newState.currentPlayer = nextPlayer;
+    newState.pendingPick = 0; // Reset pick counter
+    newState.mustPlayNormal = false; 
+
+    return newState;
 };
 
 /**
  * Check winner.
  */
 export const checkWinner = (state: GameState): Player | null => {
-  return state.players.find((p) => p.hand.length === 0) || null;
+    return state.players.find((p) => p.hand.length === 0) || null;
 };

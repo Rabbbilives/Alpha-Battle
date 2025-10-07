@@ -1,51 +1,59 @@
+// games/whot/core/ui/AnimatedWhotCard.tsx
 import React from 'react';
-import { Group } from '@shopify/react-native-skia';
-import { useSharedValue, useDerivedValue } from 'react-native-reanimated';
-import { Skia } from '@shopify/react-native-skia';
-import { WhotCard } from './whotcard';
+import { Group, Skia, useDerivedValue } from '@shopify/react-native-skia';
+import { WhotCardFace } from './WhotCardFace'; 
+import { WhotCardBack } from './WhotCardBack'; 
+import { useWhotFonts } from './useWhotFonts';
 import type { AnimatedCard } from './WhotCardTypes';
 
 interface AnimatedWhotCardProps {
-  card: AnimatedCard;
-  width: number;
-  height: number;
+    card: AnimatedCard;
+    isAnimating?: boolean; // Prop no longer strictly needed but kept for context
 }
 
-export const AnimatedWhotCard = ({ card, width, height }: AnimatedWhotCardProps) => {
-  const { x, y, isFaceUp } = card;
+export const AnimatedWhotCard = ({ card }: AnimatedWhotCardProps) => {
+    const { x, y, isFaceUp, rotate, suit, number, width, height } = card; 
+    const { font, whotFont } = useWhotFonts();
 
-  // Use a spring for the flip animation to make it bouncy
-  const flipAnimation = useSharedValue(isFaceUp.value ? 1 : 0);
+    // Use derived value for 3D rotation matrix
+    const transform = useDerivedValue(() => {
+        const matrix = Skia.Matrix();
+        // Translate to the center of the card, rotate, then translate back
+        matrix.translate(width / 2, height / 2);
+        // Rotate around the Y-axis. rotate.value is 0 to 1 (0 to 180 degrees)
+        matrix.rotate(rotate.value * Math.PI, 0, 1, 0); 
+        matrix.translate(-width / 2, -height / 2);
+        return matrix;
+    }, [rotate, width, height]);
 
-  // This derived value creates the 3D rotation for the flip effect
-  const transform = useDerivedValue(() => {
-    const matrix = Skia.Matrix();
-    matrix.translate(width / 2, height / 2);
-    matrix.rotate(flipAnimation.value * Math.PI);
-    matrix.translate(-width / 2, -height / 2);
-    return matrix;
-  }, [flipAnimation]);
+    const origin = { x: width / 2, y: height / 2 };
 
-  const origin = { x: width / 2, y: height / 2 };
+    if (!font || !whotFont) return null; // Wait for fonts
 
-  return (
-    <Group transform={[{ translateX: x.value }, { translateY: y.value }]} origin={origin}>
-      <Group matrix={transform} origin={origin}>
-        {isFaceUp.value ? (
-          <WhotCard
-            card={card}
-            width={width}
-            height={height}
-          />
-        ) : (
-          <WhotCard
-            card={card}
-            width={width}
-            height={height}
-          />
-        )}
-      </Group>
-    </Group>
-  );
+    return (
+        // Group for position animation (translateX, translateY)
+        <Group
+            transform={[{ translateX: x.value }, { translateY: y.value }]}
+            origin={origin}
+        >
+            {/* Group for flip animation (3D matrix) */}
+            <Group matrix={transform} origin={origin}>
+                {isFaceUp.value ? (
+                    <WhotCardFace
+                        suit={suit}
+                        number={number}
+                        width={width}
+                        height={height}
+                        font={font}
+                        whotFont={whotFont}
+                    />
+                ) : (
+                    <WhotCardBack
+                        width={width}
+                        height={height}
+                    />
+                )}
+            </Group>
+        </Group>
+    );
 };
-

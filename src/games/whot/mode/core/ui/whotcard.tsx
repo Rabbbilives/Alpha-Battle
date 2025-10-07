@@ -1,3 +1,4 @@
+// File: Alpha-Battle/src/games/whot/mode/core/ui/whotcard.tsx
 import React from 'react';
 import {
   Canvas,

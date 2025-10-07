@@ -1,245 +1,301 @@
-// Create this new file, e.g., in your `games/whot/` folder
-import React, { useState, useEffect } from "react";
-import { SafeAreaView, StyleSheet, View, Text, TouchableOpacity, Alert, FlatList, ActivityIndicator } from "react-native";
-import { WhotCard } from "../core/ui/whotcard";
-import { CardBack } from "../core/ui/CardBack";
-import { initGame, playCard, pickCard, checkWinner } from "../core/game";
-import { GameState, Card } from "../core/types";
-import WhotPlayerProfile from "../core/ui/whotplayerProfile";
-import { usePlayerProfile } from "@/src/hooks/usePlayerProfile" // Adjust path as needed
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { View, StyleSheet, Dimensions, Text, Button, ScrollView } from "react-native";
+import { Canvas, Rect } from "@shopify/react-native-skia";
+import { 
+    withTiming, 
+    runOnJS 
+} from 'react-native-reanimated';
 
-// Constants for card dimensions
-const CARD_WIDTH = 80;
-const CARD_HEIGHT = 120;
+// ⚠️ Adjust this import path if needed based on your file structure
+import AnimatedCardList, { AnimatedCardListHandle, Card } from "../core/ui/AnimatedCardList";
+import ComputerUI, { levels } from "./whortComputerUI"; 
 
-const WhotComputerGameScreen = () => {
-  const [game, setGame] = useState<GameState>(initGame(["Player", "Computer"], 7, "rule2"));
+// --- Core Game Types and Helpers ---
+// EXPORTING Card type so AnimatedCardList can import it
+export type Card = { id: string; suit: string; rank: string; number?: string }; 
+type GameState = { players: { name: string, hand: Card[] }[]; pile: Card[]; market: Card[]; currentPlayer: number };
 
-  // Call the custom hook to get live player data for the 'whot' game
-  const { name, country, rating, avatar, isLoading, loadGameStats, updateGameStats } = usePlayerProfile('whot');
+const CARD_WIDTH = 70;
+const CARD_HEIGHT = 100;
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-  // Load the player's game stats when the component first renders
-  useEffect(() => {
-    loadGameStats();
-  }, [loadGameStats]);
-
-  // This effect runs whenever the game state changes to check for a winner
-  useEffect(() => {
-    if (game) {
-      const winner = checkWinner(game);
-      if (winner) {
-        Alert.alert("Game Over", `${winner.name} wins the game!`);
-
-        // Example: Here you would calculate the new rating and update the stats
-        // const newRating = calculateNewRating(rating, ...); 
-        const isHumanWinner = winner.name === name;
-
-        if (isHumanWinner) {
-          // updateGameStats('win', newRating);
-          console.log("Player WON. Update stats here.");
-        } else {
-          // updateGameStats('loss', newRating);
-          console.log("Player LOST. Update stats here.");
-        }
-      }
+// Mock Game Initialization
+const initGame = (players: string[], handSize: number, rule: string): GameState => {
+    const allCards: Card[] = [];
+    for (let i = 1; i <= 25; i++) {
+        // Ensure initial cards for players and pile are created first (c-1 to c-13)
+        allCards.push({ id: `c-${i}`, suit: i % 2 === 0 ? 'Star' : 'Whot', rank: String(i), number: String(i) });
     }
-  }, [game, name, updateGameStats]);
-
-
-  // Handler for when the player plays a card
-  const handlePlayCard = (card: Card) => {
-    if (game.currentPlayer !== 0) return; // Player is always index 0
-
-    try {
-      const newState = playCard(game, 0, card, "rule2");
-      setGame(newState);
-    } catch (e: any) {
-      Alert.alert("Invalid Move", e.message);
-    }
-  };
-
-  // Handler for when the player draws a card from the market
-  const handlePickCard = () => {
-    if (game.currentPlayer !== 0) return;
-    const newState = pickCard(game, 0);
-    setGame(newState);
-  };
-
-  const humanPlayer = game.players[0];
-  const computerPlayer = game.players[1];
-
-  // Create a data object for the human player from the hook's live data
-  const humanPlayerData = {
-      name: name,
-      rating: rating,
-      country: country,
-      avatar: avatar,
-      cardCount: humanPlayer.hand.length,
-      isAI: false,
-  };
-
-  // Create a static data object for the AI opponent
-  const computerPlayerData = {
-      name: "Computer",
-      rating: 1800, // This could be based on a selected difficulty level
-      country: "US",
-      avatar: null,
-      cardCount: computerPlayer.hand.length,
-      isAI: true,
-  };
-
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        {/* === TOP ZONE: OPPONENT === */}
-        <View style={styles.topZone}>
-          <WhotPlayerProfile {...computerPlayerData} />
-          <FlatList
-            data={computerPlayer.hand}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            scrollEnabled={false}
-            keyExtractor={(_, index) => `opponent-${index}`}
-            renderItem={({ index }) => (
-              <View style={[styles.cardWrapper, { marginLeft: index > 0 ? -50 : 0 }]}>
-                <CardBack width={CARD_WIDTH} height={CARD_HEIGHT} />
-              </View>
-            )}
-            style={styles.handList}
-            contentContainerStyle={{flexGrow: 1, justifyContent: 'flex-end'}}
-          />
-        </View>
-
-        {/* === MIDDLE ZONE: GAME PILES === */}
-        <View style={styles.middleZone}>
-          {game.pile.length > 0 && (
-            <View style={styles.playedCard}>
-              <WhotCard
-                width={CARD_WIDTH + 10}
-                height={CARD_HEIGHT + 10}
-                suit={game.pile[game.pile.length - 1].suit}
-                number={game.pile[game.pile.length - 1].number}
-              />
-            </View>
-          )}
-
-          <TouchableOpacity onPress={handlePickCard} disabled={game.currentPlayer !== 0}>
-            <View style={styles.drawPile}>
-                <CardBack width={CARD_WIDTH} height={CARD_HEIGHT} />
-                <View style={styles.drawPileBadge}>
-                    <Text style={styles.drawPileCount}>{game.market.length}</Text>
-                </View>
-                <Text style={styles.drawText}>DRAW</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* === BOTTOM ZONE: PLAYER === */}
-        <View style={styles.bottomZone}>
-          {isLoading ? (
-            <ActivityIndicator size="large" color="white" />
-          ) : (
-            <WhotPlayerProfile {...humanPlayerData} />
-          )}
-          <FlatList
-            data={humanPlayer.hand}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item, index }) => (
-              <TouchableOpacity
-                onPress={() => handlePlayCard(item)}
-                disabled={game.currentPlayer !== 0}
-                style={[styles.cardWrapper, { marginLeft: index > 0 ? -50 : 0 }]}
-              >
-                <WhotCard suit={item.suit} number={item.number} width={CARD_WIDTH} height={CARD_HEIGHT} />
-              </TouchableOpacity>
-            )}
-            style={styles.handList}
-            contentContainerStyle={{flexGrow: 1, justifyContent: 'flex-end'}}
-          />
-        </View>
-      </View>
-    </SafeAreaView>
-  );
+    return {
+        players: [
+            // Player 0 gets 6 cards (c-1 to c-6)
+            { name: players[0], hand: allCards.slice(0, 6) }, 
+            // Player 1 (Computer) gets 6 cards (c-7 to c-12)
+            { name: players[1], hand: allCards.slice(6, 12) }, 
+        ],
+        // Pile gets 1 card (c-13)
+        pile: allCards.slice(12, 13),
+        // Market gets the rest (c-14 to c-25)
+        market: allCards.slice(13),
+        currentPlayer: 0, // Player 0 starts
+    };
 };
 
-// You can reuse most of your styles from WhotGame.tsx
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: '#046307', // Green felt background from the screenshot
-  },
-  container: {
-    flex: 1,
-    justifyContent: 'space-between', // Pushes top/bottom zones to edges
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  // ZONES
-  topZone: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    paddingHorizontal: 10,
-    justifyContent: 'space-between',
-  },
-  middleZone: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: '100%',
-  },
-  bottomZone: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    paddingHorizontal: 10,
-    justifyContent: 'space-between',
-  },
-  // PILES
-  playedCard: {
-    marginRight: 40,
-  },
-  drawPile: {
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'rgba(255, 255, 255, 0.5)',
-    borderStyle: 'dashed',
-    borderRadius: 10,
-    padding: 10,
-  },
-  drawPileBadge: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    backgroundColor: '#A22323',
-    borderRadius: 12,
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#FFF',
-    zIndex: 1, // Ensure it's on top
-  },
-  drawPileCount: {
-    color: 'white',
-    fontWeight: 'bold',
-  },
-  drawText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
-    marginTop: 5,
-  },
-  // HANDS
-  handList: {
-    flex: 1, // Allows the list to take the remaining available space
-  },
-  cardWrapper: {
-    // This is a placeholder. The essential overlap style (negative margin)
-    // is applied directly within the FlatList's renderItem for logic.
-  },
-});
+const useWhotFonts = () => ({ font: null, whotFont: null, areLoaded: true });
+
+// Coordinate Calculator
+// EXPORTING getCoords so AnimatedCardList can import it
+export const getCoords = (location: 'market' | 'player' | 'computer' | 'pile', index: number = 0) => {
+    const MARKET_X = SCREEN_WIDTH / 2 - CARD_WIDTH / 2;
+    const MARKET_Y = SCREEN_HEIGHT / 2 - CARD_HEIGHT / 2;
+    
+    // Total width of a 6-card hand, used for centering
+    const HAND_GAP = 10;
+    const MAX_CARDS_IN_HAND = 6;
+    const HAND_WIDTH = MAX_CARDS_IN_HAND * CARD_WIDTH + (MAX_CARDS_IN_HAND - 1) * HAND_GAP;
+    
+    // Base position for deck/pile (Center of the card)
+    const deckCenter = { x: MARKET_X + CARD_WIDTH / 2, y: MARKET_Y + CARD_HEIGHT / 2 };
+
+    switch (location) {
+        case 'market': 
+            // Apply a small offset based on index for a stacked deck look
+            const offset = index * 0.5; 
+            return { x: deckCenter.x + offset, y: deckCenter.y + offset };
+        
+        case 'pile': 
+            // Fixed position next to the market
+            return { x: MARKET_X + CARD_WIDTH + HAND_GAP + CARD_WIDTH / 2, y: deckCenter.y };
+        
+        case 'player': 
+            // Calculate the starting point to center the hands
+            const playerStartX = SCREEN_WIDTH / 2 - HAND_WIDTH / 2;
+            const playerX = playerStartX + index * (CARD_WIDTH + HAND_GAP) + CARD_WIDTH / 2;
+            return { x: playerX, y: SCREEN_HEIGHT - 50 }; 
+            
+        case 'computer': 
+            // Calculate the starting point to center the hands
+            const computerStartX = SCREEN_WIDTH / 2 - HAND_WIDTH / 2;
+            const computerX = computerStartX + index * (CARD_WIDTH + HAND_GAP) + CARD_WIDTH / 2;
+            return { x: computerX, y: 50 };
+            
+        default: return deckCenter;
+    }
+};
+
+// --- Main Component ---
+const WhotComputerGameScreen = () => {
+    const { areLoaded } = useWhotFonts();
+    
+    const [selectedLevel, setSelectedLevel] = useState<string | null>(null);
+    const [game, setGame] = useState<GameState | null>(null);
+    const [isAnimating, setIsAnimating] = useState(false);
+    
+    // Cards array containing ALL cards in the game (used to populate AnimatedCardList)
+    const [initialDeckData, setInitialDeckData] = useState<Card[]>([]);
+    
+    // ⚠️ NEW STATE: Flag to ensure AnimatedCardList has rendered its individual card components
+    const [cardsReady, setCardsReady] = useState(false); 
+    
+    // Ref for calling the AnimatedCardList imperative functions
+    const cardListRef = useRef<AnimatedCardListHandle>(null);
+
+    // Determine the market position once
+    const marketPosition = useMemo(() => getCoords('market'), []);
+
+    // Function called when a level is selected
+    const initializeGame = useCallback((lvl: string) => {
+        const newGame = initGame(["Player", "Computer"], 6, "rule2");
+        
+        // Combine ALL cards (Player, Computer, Pile, Market)
+        const allGameCards: Card[] = [
+            ...newGame.players[0].hand, 
+            ...newGame.players[1].hand, 
+            ...newGame.pile, 
+            ...newGame.market
+        ].filter((card, index, self) => index === self.findIndex((c) => c.id === card.id)); 
+
+        // Set the list of ALL cards that AnimatedCardList should render
+        setInitialDeckData(allGameCards);
+        
+        // Set the game state and animation flag
+        setGame(newGame); 
+        setSelectedLevel(lvl);
+        setIsAnimating(true); // Start blocking UI while dealing
+    }, []); 
+
+    // 1. Wait for `initialDeckData` and `game` to be set, then delay for component mounting
+    useEffect(() => {
+        if (initialDeckData.length > 0 && game) {
+             // Delay to ensure AnimatedCardList and all child refs are assigned.
+             const timer = setTimeout(() => {
+                 setCardsReady(true);
+             }, 50); 
+             
+             return () => clearTimeout(timer);
+        }
+    }, [initialDeckData.length, game]);
+
+    // 2. Start the deal sequence only when `cardsReady` is true
+    useEffect(() => {
+        // We use `game && game.players` to satisfy TypeScript that game is not null
+        if (cardsReady && cardListRef.current && game && game.players.length > 0) {
+            const dealer = cardListRef.current;
+            const dealSequentially = async () => {
+                console.log("Starting deal sequence...");
+                
+                // Deal 5 cards each, one by one, alternating player and computer
+                for (let i = 0; i < 5; i++) {
+                    // 1. Deal to Player (Face Up)
+                    const playerCard = game!.players[0].hand[i];
+                    await dealer.dealCard(playerCard, 'player', i, true);
+                    
+                    // 2. Deal to Computer (Face Down)
+                    const computerCard = game!.players[1].hand[i];
+                    await dealer.dealCard(computerCard, 'computer', i, false); 
+                }
+                
+                // Deal the 6th card to the Player and Computer
+                await dealer.dealCard(game!.players[0].hand[5], 'player', 5, true);
+                await dealer.dealCard(game!.players[1].hand[5], 'computer', 5, false);
+
+                // 3. Deal the first card to the Pile (Face Up)
+                const pileCard = game!.pile[0];
+                await dealer.dealCard(pileCard, 'pile', 0, true);
+                
+                // The remaining cards (market) stay in the 'market' position (default)
+                
+                console.log("Deal sequence complete.");
+                setIsAnimating(false); // Enable controls
+            };
+
+            dealSequentially();
+            
+            // Reset the flag to prevent re-running if the game state changes later
+            setCardsReady(false);
+        }
+    }, [cardsReady]); 
+
+    // --- Render Logic ---
+
+    // 1. Initial State: Level Selection
+    if (!selectedLevel) {
+        return (
+            <View style={[styles.container, styles.centerContent]}>
+                <Text style={styles.title}>Select Computer Level</Text>
+                <ScrollView style={styles.levelSelector}>
+                    {levels.map((level) => (
+                        <View key={level.value} style={styles.levelButtonContainer}>
+                            <Button 
+                                title={`${level.label}`} 
+                                onPress={() => initializeGame(level.label)} 
+                                color="#1E5E4E"
+                            />
+                        </View>
+                    ))}
+                </ScrollView>
+            </View>
+        );
+    }
+    
+    // 2. Game State: Canvas, Cards, and UI
+    return (
+        <View style={styles.container}>
+            {/* Background Skia Canvas */}
+            <Canvas style={StyleSheet.absoluteFillObject}>
+                <Rect x={0} y={0} width={SCREEN_WIDTH} height={SCREEN_HEIGHT} color="#1E5E4E" />
+            </Canvas>
+
+            {/* Animated Cards Layer */}
+            {initialDeckData.length > 0 && (
+                <AnimatedCardList 
+                    ref={cardListRef} 
+                    initialDeckData={initialDeckData} 
+                    marketPos={marketPosition} 
+                />
+            )}
+
+            {/* Computer UI Display (Top of screen) */}
+            <View style={styles.computerUI}>
+                <ComputerUI 
+                    state={game} 
+                    playerIndex={1} 
+                    level={levels.find(l => l.label === selectedLevel)?.value || 1} 
+                    onStateChange={setGame} 
+                />
+            </View>
+
+            {/* Overlay for player controls (Bottom of screen) */}
+            <View style={styles.controlsOverlay}>
+                <Text style={styles.playerHandText}>Your Hand ({game?.players[0].hand.length ?? 0} cards)</Text>
+                {/* Block user interaction while dealing */}
+                {isAnimating && <View style={styles.blocker}><Text style={{color: 'white'}}>Dealing...</Text></View>}
+            </View>
+        </View>
+    );
+};
+
 export default WhotComputerGameScreen;
+
+// --- STYLES (Unchanged) ---
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: '#222',
+    },
+    title: {
+        fontSize: 24,
+        color: '#FFF',
+        marginBottom: 20,
+        textAlign: 'center',
+    },
+    centerContent: { 
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    levelSelector: { 
+        width: '90%',
+        maxHeight: '70%',
+    },
+    levelButtonContainer: { 
+        marginBottom: 15,
+        alignItems: 'center',
+    },
+    levelReward: { 
+        color: '#FFD700',
+        fontSize: 14,
+        marginTop: 5,
+    },
+    computerUI: {
+        position: 'absolute',
+        top: 20,
+        width: '100%',
+        alignItems: 'center',
+        zIndex: 5,
+    },
+    controlsOverlay: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 150,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 10,
+        zIndex: 10, 
+    },
+    playerHandText: {
+        color: 'white',
+        fontSize: 16,
+        marginBottom: 10,
+    },
+    blocker: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 20, 
+    }
+});

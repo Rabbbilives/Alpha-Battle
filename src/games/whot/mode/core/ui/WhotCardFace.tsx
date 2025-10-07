@@ -1,3 +1,4 @@
+// File: Alpha-Battle/src/games/whot/mode/core/ui/WhotCardFace.tsx
 import React from 'react';
 import { Group, Skia, RoundedRect, Text, Path, Circle, Rect } from '@shopify/react-native-skia';
 import type { SkFont } from '@shopify/react-native-skia';

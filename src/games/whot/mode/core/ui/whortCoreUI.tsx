@@ -1,3 +1,4 @@
+// File: Alpha-Battle/src/games/whot/mode/core/ui/whortCoreUI.tsx
 import React, { useState } from "react";
 import { SafeAreaView, ScrollView, StyleSheet, View, Text, TouchableOpacity } from "react-native";
 import { WhotCard, CardSuit } from "./whotcard";
