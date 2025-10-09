@@ -1,6 +1,6 @@
-// games/whot/core/ui/AnimatedWhotCard.tsx
 import React from 'react';
-import { Group, Skia, useDerivedValue } from '@shopify/react-native-skia';
+import { Group, Skia } from '@shopify/react-native-skia';
+import { useDerivedValue } from 'react-native-reanimated';
 import { WhotCardFace } from './WhotCardFace'; 
 import { WhotCardBack } from './WhotCardBack'; 
 import { useWhotFonts } from './useWhotFonts';
@@ -8,37 +8,39 @@ import type { AnimatedCard } from './WhotCardTypes';
 
 interface AnimatedWhotCardProps {
     card: AnimatedCard;
-    isAnimating?: boolean; // Prop no longer strictly needed but kept for context
 }
 
 export const AnimatedWhotCard = ({ card }: AnimatedWhotCardProps) => {
-    const { x, y, isFaceUp, rotate, suit, number, width, height } = card; 
+    const { x, y, rotate, suit, number, width, height } = card; 
     const { font, whotFont } = useWhotFonts();
 
-    // Use derived value for 3D rotation matrix
     const transform = useDerivedValue(() => {
+        return [{ translateX: x.value }, { translateY: y.value }];
+    }, [x, y]);
+
+    const animationTransform = useDerivedValue(() => {
         const matrix = Skia.Matrix();
-        // Translate to the center of the card, rotate, then translate back
         matrix.translate(width / 2, height / 2);
-        // Rotate around the Y-axis. rotate.value is 0 to 1 (0 to 180 degrees)
-        matrix.rotate(rotate.value * Math.PI, 0, 1, 0); 
+        matrix.rotate(rotate.value * Math.PI, 0, 1, 0); // Rotate around Y-axis
         matrix.translate(-width / 2, -height / 2);
         return matrix;
     }, [rotate, width, height]);
 
-    const origin = { x: width / 2, y: height / 2 };
+    const faceCorrectionMatrix = Skia.Matrix();
+    faceCorrectionMatrix.translate(width / 2, height / 2);
+    faceCorrectionMatrix.rotate(Math.PI, 0, 1, 0); // Pre-rotate the face 180 degrees
+    faceCorrectionMatrix.translate(-width / 2, -height / 2);
 
-    if (!font || !whotFont) return null; // Wait for fonts
+    const backOpacity = useDerivedValue(() => (rotate.value < 0.5 ? 1 : 0), [rotate]);
+    const frontOpacity = useDerivedValue(() => (rotate.value >= 0.5 ? 1 : 0), [rotate]);
 
     return (
-        // Group for position animation (translateX, translateY)
-        <Group
-            transform={[{ translateX: x.value }, { translateY: y.value }]}
-            origin={origin}
-        >
-            {/* Group for flip animation (3D matrix) */}
-            <Group matrix={transform} origin={origin}>
-                {isFaceUp.value ? (
+        <Group transform={transform}>
+            <Group matrix={animationTransform}>
+                <Group opacity={backOpacity}>
+                    <WhotCardBack width={width} height={height} />
+                </Group>
+                <Group opacity={frontOpacity} matrix={faceCorrectionMatrix}>
                     <WhotCardFace
                         suit={suit}
                         number={number}
@@ -47,12 +49,7 @@ export const AnimatedWhotCard = ({ card }: AnimatedWhotCardProps) => {
                         font={font}
                         whotFont={whotFont}
                     />
-                ) : (
-                    <WhotCardBack
-                        width={width}
-                        height={height}
-                    />
-                )}
+                </Group>
             </Group>
         </Group>
     );

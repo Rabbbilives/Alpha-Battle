@@ -1,4 +1,3 @@
-
 // src/navigation/types.ts
 export type RootStackParamList = {
   SignUp: undefined;
@@ -31,6 +30,7 @@ export type Player = {
 export interface GameStats {
   id: string;
   gameId: string;
+  title: string;
   wins: number;
   losses: number;
   draws: number;

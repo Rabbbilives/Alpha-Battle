@@ -1,4 +1,3 @@
-// File: Alpha-Battle/src/games/whot/mode/core/ui/WhotCardFace.tsx
 import React from 'react';
 import { Group, Skia, RoundedRect, Text, Path, Circle, Rect } from '@shopify/react-native-skia';
 import type { SkFont } from '@shopify/react-native-skia';
@@ -55,8 +54,8 @@ const RenderShape = ({ suit, cx, cy, size }: RenderShapeProps) => {
 };
 
 export interface WhotCardFaceProps {
-  suit: CardSuit;
-  number: number;
+  suit: string;
+  number?: number;
   width: number;
   height: number;
   font: SkFont | null;
@@ -66,9 +65,11 @@ export interface WhotCardFaceProps {
 export const WhotCardFace = ({ suit, number, width, height, font, whotFont }: WhotCardFaceProps) => {
   if (!font || !whotFont) return null;
 
+  const cardSuit = suit as CardSuit;
+  const cardStr = number ? String(number) : '';
+
   const cornerRadius = 10;
   const padding = 10;
-  const cardStr = String(number);
   const textWidth = font.getTextWidth(cardStr);
   const cx = width / 2;
   const cy = height / 2;
@@ -82,7 +83,7 @@ export const WhotCardFace = ({ suit, number, width, height, font, whotFont }: Wh
       <RoundedRect x={0} y={0} width={width} height={height} r={cornerRadius} color="#FFFFFF" />
       <RoundedRect x={1} y={1} width={width - 2} height={height - 2} r={cornerRadius} color="#A22323" style="stroke" strokeWidth={2} />
       
-      {suit === 'whot' ? (
+      {cardSuit === 'whot' ? (
         <Text 
           x={cx - whotFont.getTextWidth('WHOT?') / 2} 
           y={cy + whotFont.getSize() / 2} 
@@ -93,14 +94,14 @@ export const WhotCardFace = ({ suit, number, width, height, font, whotFont }: Wh
       ) : (
         <>
           <Text x={padding} y={numberY} text={cardStr} font={font} color="#A22323" />
-          <RenderShape suit={suit} cx={smallShapeCX} cy={smallShapeCY} size={smallShapeSize} />
+          <RenderShape suit={cardSuit} cx={smallShapeCX} cy={smallShapeCY} size={smallShapeSize} />
           
           <Group origin={{ x: width / 2, y: height / 2 }} transform={[{ rotate: Math.PI }]}>
             <Text x={padding} y={numberY} text={cardStr} font={font} color="#A22323" />
-            <RenderShape suit={suit} cx={smallShapeCX} cy={smallShapeCY} size={smallShapeSize} />
+            <RenderShape suit={cardSuit} cx={smallShapeCX} cy={smallShapeCY} size={smallShapeSize} />
           </Group>
           
-          <RenderShape suit={suit} cx={cx} cy={cy} size={width * 0.5} />
+          <RenderShape suit={cardSuit} cx={cx} cy={cy} size={width * 0.5} />
         </>
       )}
     </Group>

@@ -1,20 +1,14 @@
-// WhotCardBack.tsx
 import React from 'react';
-import { Canvas, RoundedRect, Text, useFont, Group } from '@shopify/react-native-skia';
+import { RoundedRect, Text, useFont, Group } from '@shopify/react-native-skia';
 
 export interface WhotCardBackProps {
   width?: number;
   height?: number;
 }
-
-// This is the corrected, self-contained component
 export const WhotCardBack = ({ width = 100, height = 150 }: WhotCardBackProps) => {
-  // Note: For this to work, you must have the font file at this location.
-  // If not, you can revert to `useFont(null, ...)` to use the system font.
   const font = useFont(require('../../../../../assets/fonts/SpaceMono-Regular.ttf'), 20);
   const smallFont = useFont(require('../../../../../assets/fonts/SpaceMono-Regular.ttf'), 12);
 
-  // A loading state is important while fonts are being loaded asynchronously.
   if (!font || !smallFont) {
     return null;
   }
@@ -32,9 +26,8 @@ export const WhotCardBack = ({ width = 100, height = 150 }: WhotCardBackProps) =
   const smallWhotTextWidth = smallFont.getTextWidth(smallWhotText);
 
   return (
-    // Every Skia component MUST be inside a Canvas.
-    // By placing the Canvas here, this component can be used anywhere.
-    <Canvas style={{ width, height, margin: 5 }}>
+    // Use a Group, not a Canvas
+    <Group>
       {/* Card Background */}
       <RoundedRect x={0} y={0} width={width} height={height} r={cornerRadius} color={backgroundColor} />
       
@@ -66,8 +59,6 @@ export const WhotCardBack = ({ width = 100, height = 150 }: WhotCardBackProps) =
           color={textColor}
         />
       </Group>
-
-      {/* Bottom-right rotated text */}
       <Group
         origin={{ x: width * 0.75, y: height * 0.75 }}
         transform={[{ rotate: (3 * Math.PI) / 4 }]}
@@ -80,6 +71,6 @@ export const WhotCardBack = ({ width = 100, height = 150 }: WhotCardBackProps) =
           color={textColor}
         />
       </Group>
-    </Canvas>
+    </Group>
   );
 };

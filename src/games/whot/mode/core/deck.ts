@@ -1,41 +1,35 @@
-// games/whot/core/deck.ts
+// games/whot/core/deck.ts (Corrected version)
 import { Card, CardSuit } from "./types";
 
-/**
- * Generate a Whot deck.
- */
+const SUIT_CARDS: { [key in CardSuit]?: number[] } = {
+    circle:   [1, 2, 3, 4, 5, 7, 8, 10, 11, 12, 13, 14],
+    triangle: [1, 2, 3, 4, 5, 7, 8, 10, 11, 12, 13, 14],
+    cross:    [1, 2, 3, 5, 7, 10, 11, 13, 14],
+    square:   [1, 2, 3, 5, 7, 10, 11, 13, 14],
+    star:     [1, 2, 3, 4, 5, 7, 8],
+};
+
 export const generateDeck = (ruleVersion: "rule1" | "rule2" = "rule1"): Card[] => {
-    const suits: CardSuit[] = ["circle", "triangle", "cross", "square", "star"];
     const deck: Card[] = [];
 
-    // Add normal suits (1-14)
-    suits.forEach((suit) => {
-        for (let num = 1; num <= 14; num++) {
-            deck.push({
-                id: `${suit}-${num}`,
-                suit,
-                number: num,
-            });
-        }
-    });
+    // Add normal suit cards based on the authentic distribution
+    for (const suit in SUIT_CARDS) {
+        const cardSuit = suit as CardSuit;
+        SUIT_CARDS[cardSuit]?.forEach(num => {
+            deck.push({ id: `${cardSuit}-${num}`, suit: cardSuit, number: num });
+        });
+    }
 
-    if (ruleVersion === "rule1") {
-        // Add 5 Whot cards (number 20)
-        for (let i = 1; i <= 5; i++) {
-            deck.push({
-                id: `whot-${i}`,
-                suit: "whot",
-                number: 20,
-            });
-        }
+    // Add Whot cards (number 20)
+    const whotCount = ruleVersion === "rule1" ? 5 : 0; // Rule 2 often has no Whot cards
+    for (let i = 1; i <= whotCount; i++) {
+        deck.push({ id: `whot-${i}`, suit: "whot", number: 20 });
     }
 
     return deck;
 };
 
-/**
- * Shuffle deck using Fisher-Yates.
- */
+// shuffleDeck function remains the same, it's perfect.
 export const shuffleDeck = (deck: Card[]): Card[] => {
     const arr = [...deck];
     for (let i = arr.length - 1; i > 0; i--) {

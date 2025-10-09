@@ -12,5 +12,5 @@
   "include": [
     "**/*.ts",
     "**/*.tsx"
-  ]
+, "src/games/whot/mode/core/ui/Sk"  ]
 }

@@ -5,7 +5,8 @@ import { CardSuit } from "./ui/WhotCardTypes";
 export interface Card {
     id: string;
     suit: CardSuit;
-    number: number;
+    number?: number; // Make number optional
+    rank: string; // Add rank property
 }
 
 // Player definition

@@ -4,7 +4,7 @@ import {
   View,
   Text,
   ScrollView,
-  Image,
+  Image,  
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
