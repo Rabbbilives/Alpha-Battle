@@ -34,7 +34,7 @@ export const AnimatedWhotCard = ({ card }: AnimatedWhotCardProps) => {
     faceCorrectionMatrix.translate(-width / 2, -height / 2);
 
     const backOpacity = useDerivedValue(() => {
-        return rotate.value < Math.PI / 2 ? 1 : 0;
+        return rotate.value <= Math.PI / 2 ? 1 : 0;
     }, [rotate]);
 
     const frontOpacity = useDerivedValue(() => {
