@@ -21,18 +21,25 @@ export const AnimatedWhotCard = ({ card }: AnimatedWhotCardProps) => {
     const animationTransform = useDerivedValue(() => {
         const matrix = Skia.Matrix();
         matrix.translate(width / 2, height / 2);
-        matrix.rotate(rotate.value * Math.PI, 0, 1, 0); // Rotate around Y-axis
+        // ✅ CHANGED: Scale the X-axis for a left-to-right flip
+        matrix.scale(Math.cos(rotate.value), 1);
         matrix.translate(-width / 2, -height / 2);
         return matrix;
     }, [rotate, width, height]);
 
     const faceCorrectionMatrix = Skia.Matrix();
     faceCorrectionMatrix.translate(width / 2, height / 2);
-    faceCorrectionMatrix.rotate(Math.PI, 0, 1, 0); // Pre-rotate the face 180 degrees
+    // ✅ CHANGED: Pre-flip the face horizontally
+    faceCorrectionMatrix.scale(-1, 1); 
     faceCorrectionMatrix.translate(-width / 2, -height / 2);
 
-    const backOpacity = useDerivedValue(() => (rotate.value < 0.5 ? 1 : 0), [rotate]);
-    const frontOpacity = useDerivedValue(() => (rotate.value >= 0.5 ? 1 : 0), [rotate]);
+    const backOpacity = useDerivedValue(() => {
+        return rotate.value < Math.PI / 2 ? 1 : 0;
+    }, [rotate]);
+
+    const frontOpacity = useDerivedValue(() => {
+        return rotate.value >= Math.PI / 2 ? 1 : 0;
+    }, [rotate]);
 
     return (
         <Group transform={transform}>
@@ -40,6 +47,7 @@ export const AnimatedWhotCard = ({ card }: AnimatedWhotCardProps) => {
                 <Group opacity={backOpacity}>
                     <WhotCardBack width={width} height={height} />
                 </Group>
+                
                 <Group opacity={frontOpacity} matrix={faceCorrectionMatrix}>
                     <WhotCardFace
                         suit={suit}

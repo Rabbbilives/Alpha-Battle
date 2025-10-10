@@ -11,6 +11,10 @@ export interface AnimatedCardListHandle {
         card: Card,
         target: 'player' | 'computer' | 'pile',
         options: { cardIndex: number; handSize: number },
+        shouldFlip: boolean
+    ) => Promise<void>;
+    flipCard: (
+        card: Card,
         isFaceUp: boolean
     ) => Promise<void>;
 }
@@ -46,10 +50,24 @@ const AnimatedCardList = forwardRef<AnimatedCardListHandle, AnimatedCardListProp
             []
         );
         
+        const flipCard = useCallback(
+            async (cardToFlip: Card, isFaceUp: boolean) => {
+                const cardRef = cardRefs.current[cardToFlip.id];
+                if (!cardRef) {
+                    console.error('Card ref not found for flipping:', cardToFlip.id);
+                    return;
+                }
+                const flipConfig: WithTimingConfig = { duration: 400 };
+                await cardRef.flipCard(isFaceUp, flipConfig);
+            },
+            []
+        );
+        
         AnimatedCardList.displayName = 'AnimatedCardList';
 
         useImperativeHandle(ref, () => ({
             dealCard,
+            flipCard,
         }));
         
         return (

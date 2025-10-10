@@ -50,14 +50,16 @@ const WhotComputerGameScreen = () => {
             console.log("Starting SEQUENTIAL deal...");
             const handSize = game.gameState.players[0].hand.length;
 
-            // 1. Deal cards one by one, awaiting each step completely.
+            // 1. Deal all cards face down to their initial positions
+            const flipPromises: Promise<void>[] = [];
+
             for (let i = 0; i < handSize; i++) {
                 const playerCard = game.gameState.players[0].hand[i];
                 const computerCard = game.gameState.players[1].hand[i];
 
-                // Deal to Player (face up)
+                // Deal to Player (face down)
                 if (playerCard) {
-                    await dealer.dealCard(playerCard, 'player', { cardIndex: i, handSize }, false); // Changed true to false
+                    await dealer.dealCard(playerCard, 'player', { cardIndex: i, handSize }, false);
                 }
 
                 // Deal to Computer (face down)
@@ -66,11 +68,27 @@ const WhotComputerGameScreen = () => {
                 }
             }
 
-            // 2. Deal the open card to the pile
+            // 2. Deal the open card to the pile (face down)
             const pileCard = game.gameState.pile[0];
             if (pileCard) {
-                await dealer.dealCard(pileCard, 'pile', { cardIndex: 0, handSize: 1 }, false); // Changed true to false
+                await dealer.dealCard(pileCard, 'pile', { cardIndex: 0, handSize: 1 }, false);
             }
+
+            // Add a small delay before flipping all cards
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // 3. Flip all player cards and the pile card simultaneously
+            for (let i = 0; i < handSize; i++) {
+                const playerCard = game.gameState.players[0].hand[i];
+                if (playerCard) {
+                    flipPromises.push(dealer.flipCard(playerCard, true));
+                }
+            }
+            if (pileCard) {
+                flipPromises.push(dealer.flipCard(pileCard, true));
+            }
+
+            await Promise.all(flipPromises);
 
             console.log("Deal sequence complete.");
             runOnJS(setIsAnimating)(false);

@@ -81,7 +81,7 @@ const IndividualAnimatedCard = forwardRef<IndividualCardHandle, IndividualAnimat
                         }
                     };
                     
-                    rotate.value = withTiming(isFaceUp ? 1 : 0, config, onComplete);
+                    rotate.value = withTiming(isFaceUp ? Math.PI : 0, config, onComplete);
                 });
             },
         }));
