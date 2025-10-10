@@ -3,15 +3,17 @@ import { useFont } from '@shopify/react-native-skia';
 import type { SkFont } from '@shopify/react-native-skia';
 
 export const useWhotFonts = () => {
-
-  const font = useFont(null, 20);
-  const whotFont = useFont(null, 30);
+  // ✅ Replace with your actual font files in assets/fonts/
+  const font = useFont(require('../../../../../assets/fonts/SpaceMono-Regular.ttf'), 20);
+  const whotFont = useFont(require('../../../../../assets/fonts/SpaceMono-Regular.ttf'), 30);
 
   const areLoaded = font !== undefined && whotFont !== undefined;
-  
+
   return {
     font,
     whotFont,
-    areLoaded
+    areLoaded,
   };
 };
+
+
