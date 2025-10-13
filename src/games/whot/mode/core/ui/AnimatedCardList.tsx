@@ -22,10 +22,11 @@ export interface AnimatedCardListHandle {
 interface AnimatedCardListProps {
     cardsInPlay: Card[];
     marketPos: { x: number; y: number };
+    onCardPress: (card: Card) => void;
 }
 
 const AnimatedCardList = forwardRef<AnimatedCardListHandle, AnimatedCardListProps>(
-    ({ cardsInPlay, marketPos }, ref) => {
+    ({ cardsInPlay, marketPos, onCardPress }, ref) => {
         const cardRefs = useRef<{ [key: string]: IndividualCardHandle | null }>({});
         
         const dealCard = useCallback(
@@ -79,6 +80,7 @@ const AnimatedCardList = forwardRef<AnimatedCardListHandle, AnimatedCardListProp
                         index={i}
                         ref={(el) => { cardRefs.current[card.id] = el; }}
                         initialPosition={marketPos}
+                        onPress={onCardPress}
                     />
                 ))}
             </>

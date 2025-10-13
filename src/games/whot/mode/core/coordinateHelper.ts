@@ -5,6 +5,7 @@ import { Dimensions } from 'react-native';
 export const CARD_WIDTH = 80;
 export const CARD_HEIGHT = 120;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+console.log('coordinateHelper - SCREEN_WIDTH:', SCREEN_WIDTH, 'SCREEN_HEIGHT:', SCREEN_HEIGHT);
 
 /**
  * Calculates the X and Y coordinates for a card based on its location.

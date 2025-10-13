@@ -1,3 +1,4 @@
+// Alpha-Battle/src/screens/game/GameModeScreen.tsx
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useRoute } from '@react-navigation/native';
@@ -9,7 +10,7 @@ import { ToastProvider } from '@/src/hooks/useToast';
 // Import game screens
 // import { ChessGameScreen } from '../../games/chess/screens/ChessGameScreen';
 import AyoIndex from '../../games/ayo/mode/index';
-import WhotIndex from '../../games/whot/mode/index';
+import WhotIndex from "../../games/whot/mode/index";
 // import LudoScreen from '../../games/ludo/screens/LudoScreen';
 // import DraughtsScreen from '../../games/droughts/screens/DraughtsScreen';
 // import CardsScreen from '../../games/cards/screens/CardsScreen';
@@ -29,12 +30,13 @@ export default function GameModeScreen() {
   const renderGameScreen = () => {
     switch (gameId) {
       // case 'chess':
+        case 'whot':
+        return <WhotIndex mode={mode} />;
       //   return <ChessGameScreen />;
       case 'ayo':
         return <AyoIndex mode={mode} />;
       // Add cases for other games here
-       case 'whot':
-        return <WhotIndex mode={mode} />;
+
       // case 'ludo':
       //   return <LudoScreen mode={mode} />;
       // case 'droughts':

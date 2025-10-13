@@ -23,7 +23,11 @@ const WhotComputerGameScreen = () => {
     const [cardsReady, setCardsReady] = useState(false);
 
     const cardListRef = useRef<AnimatedCardListHandle>(null);
-    const marketPosition = useMemo(() => getCoords('market'), []);
+    const marketPosition = useMemo(() => {
+        const pos = getCoords('market');
+        console.log('WhotComputerGameScreen - marketPosition:', pos);
+        return pos;
+    }, []);
 
     const initializeGame = useCallback((lvl: string) => {
         const gameData = initGame(["Player", "Computer"], 6);
@@ -118,23 +122,30 @@ const WhotComputerGameScreen = () => {
     }
     
     return (
-        <View style={styles.container}>
-            <Canvas style={[StyleSheet.absoluteFillObject, isAnimating && { zIndex: 21 }]}>
-                <Rect x={0} y={0} width={Dimensions.get('window').width} height={Dimensions.get('window').height} color="#1E5E4E" />
-                {allCards.length > 0 && (
-                    <AnimatedCardList
-                        ref={cardListRef}
-                        cardsInPlay={allCards}
-                        marketPos={marketPosition}
-                    />
-                )}
-            </Canvas>
+      <View style={StyleSheet.absoluteFillObject}>
+  <Canvas style={[StyleSheet.absoluteFillObject, isAnimating && { zIndex: 21 }]}>
+    <Rect
+      x={0}
+      y={0}
+      width={Dimensions.get('window').width}
+      height={Dimensions.get('window').height}
+      color="#1E5E4E"
+    />
+  </Canvas>
 
-            <View style={styles.controlsOverlay}>
-                <Text style={styles.playerHandText}>Your Hand ({game?.gameState.players[0].hand.length ?? 0} cards)</Text>
-                {isAnimating && <View style={styles.blocker}><Text style={{ color: 'white' }}>Dealing...</Text></View>}
-            </View>
-        </View>
+  {/* ✅ Move gesture-enabled content OUTSIDE the Canvas */}
+  {allCards.length > 0 && (
+    <AnimatedCardList
+      ref={cardListRef}
+      cardsInPlay={allCards}
+      marketPos={marketPosition}
+      onCardPress={(card) => {
+        console.log("Card pressed:", card);
+      }}
+    />
+  )}
+</View>
+
     );
 };
 
