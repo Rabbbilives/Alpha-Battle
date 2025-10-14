@@ -128,7 +128,7 @@ const IndividualAnimatedCard = forwardRef<IndividualCardHandle, IndividualAnimat
         // The AnimatedWhotCard component handles the actual Skia drawing
         return (
             <GestureDetector gesture={tapGesture}>
-                <Animated.View style={[animatedStyle, { width: CARD_WIDTH, height: CARD_HEIGHT, borderWidth: 1, borderColor: 'blue' }]}>
+                <Animated.View style={[animatedStyle, { width: CARD_WIDTH, height: CARD_HEIGHT }]}>
                     <AnimatedWhotCard card={animatedCardData} />
                 </Animated.View>
             </GestureDetector>

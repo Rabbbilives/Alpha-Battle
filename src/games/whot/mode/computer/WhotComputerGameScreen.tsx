@@ -6,17 +6,17 @@ import { Canvas, Rect } from "@shopify/react-native-skia";
 import { runOnJS } from 'react-native-reanimated';
 
 import AnimatedCardList, { AnimatedCardListHandle } from "../core/ui/AnimatedCardList";
-import { Card } from '../core/types';
+import { Card, GameState } from '../core/types';
 import { getCoords } from '../core/coordinateHelper';
 import { initGame } from '../core/whotLogic';
-
-const levels = [{ label: "Easy", value: 1 }];
+import ComputerUI, { ComputerLevel, levels } from './whotComputerUI';
 
 // Helper type for clarity
 type GameData = ReturnType<typeof initGame>;
 
 const WhotComputerGameScreen = () => {
     const [selectedLevel, setSelectedLevel] = useState<string | null>(null);
+    const [computerLevel, setComputerLevel] = useState<ComputerLevel>(levels[0].value);
     const [game, setGame] = useState<GameData | null>(null);
     const [isAnimating, setIsAnimating] = useState(false);
     const [allCards, setAllCards] = useState<Card[]>([]);
@@ -29,13 +29,20 @@ const WhotComputerGameScreen = () => {
         return pos;
     }, []);
 
-    const initializeGame = useCallback((lvl: string) => {
+    const initializeGame = useCallback((lvl: ComputerLevel) => {
         const gameData = initGame(["Player", "Computer"], 6);
         setAllCards(gameData.allCards);
         setGame(gameData);
-        setSelectedLevel(lvl);
+        setSelectedLevel(levels.find(l => l.value === lvl)?.label || null);
+        setComputerLevel(lvl);
         setIsAnimating(true);
     }, []);
+
+    const handleComputerStateChange = useCallback((newState: GameState) => {
+      if (game) {
+        setGame(prevGame => prevGame ? { ...prevGame, gameState: newState } : null);
+      }
+    }, [game]);
 
     useEffect(() => {
         if (game && allCards.length > 0) {
@@ -112,7 +119,7 @@ const WhotComputerGameScreen = () => {
                     <View key={level.value} style={styles.levelButtonContainer}>
                         <Button
                             title={`${level.label}`}
-                            onPress={() => initializeGame(level.label)}
+                            onPress={() => initializeGame(level.value)}
                             color="#1E5E4E"
                         />
                     </View>
@@ -123,15 +130,25 @@ const WhotComputerGameScreen = () => {
     
     return (
       <View style={StyleSheet.absoluteFillObject}>
-  <Canvas style={[StyleSheet.absoluteFillObject, isAnimating && { zIndex: 21 }]}>
-    <Rect
-      x={0}
-      y={0}
-      width={Dimensions.get('window').width}
-      height={Dimensions.get('window').height}
-      color="#1E5E4E"
-    />
-  </Canvas>
+        {game && (
+          <View style={styles.computerUIContainer}>
+            <ComputerUI
+              state={game.gameState}
+              playerIndex={1} // Assuming computer is player 1
+              level={computerLevel}
+              onStateChange={handleComputerStateChange}
+            />
+          </View>
+        )}
+        <Canvas style={[StyleSheet.absoluteFillObject, isAnimating && { zIndex: 21 }]}>
+            <Rect
+              x={0}
+              y={0}
+              width={Dimensions.get('window').width}
+              height={Dimensions.get('window').height}
+              color="#1E5E4E"
+            />
+        </Canvas>
 
   {/* ✅ Move gesture-enabled content OUTSIDE the Canvas */}
   {allCards.length > 0 && (
@@ -148,6 +165,15 @@ const WhotComputerGameScreen = () => {
 
     );
 };
+
+const computerUIStyles = StyleSheet.create({
+  computerUIContainer: {
+    position: 'absolute',
+    top: 50, // Adjust as needed
+    alignSelf: 'center',
+    zIndex: 10,
+  },
+});
 
 // ... Styles are unchanged ...
 const styles = StyleSheet.create({

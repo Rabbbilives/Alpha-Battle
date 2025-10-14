@@ -12,8 +12,6 @@ const chooseComputerMove = (state: GameState, playerIndex: number, level: number
     if (state.players[playerIndex].hand.length > 0) return state.players[playerIndex].hand[0];
     return null;
 };
-
-
 // Level definitions
 export const levels = [
  { label: "Apprentice (Easy)", value: 1, rating: 1200, reward: 10 },
@@ -31,16 +29,12 @@ type Props = {
  level: ComputerLevel;
  onStateChange: (newState: GameState) => void;
 };
-
 const ComputerUI: React.FC<Props> = ({ state, playerIndex, level, onStateChange }) => {
  const [lastPlayed, setLastPlayed] = useState<Card | null>(null);
-
  useEffect(() => {
   if (!state || state.currentPlayer !== playerIndex) return;
-
   // Simulate "thinking delay"
   const timer = setTimeout(() => {
-   
    const move = chooseComputerMove(state, playerIndex, level);
    if (move) {
     // NOTE: This is MOCK game logic
@@ -57,13 +51,10 @@ const ComputerUI: React.FC<Props> = ({ state, playerIndex, level, onStateChange 
 
   return () => clearTimeout(timer);
  }, [state, playerIndex, level, onStateChange]);
-
  const levelInfo = levels.find((l) => l.value === level);
-
   if (!state) {
     return null;
   }
-
  return (
   <View style={styles.container}>
    <Text style={styles.name}>
